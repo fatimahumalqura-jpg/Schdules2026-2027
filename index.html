@@ -167,6 +167,17 @@
   }
   .edit-mode .edit-toolbar{display:flex;}
   .edit-toolbar .divider{width:1px; height:22px; background:var(--border);}
+  .tb-group{display:none; gap:8px; align-items:center;}
+  .tb-group.active{display:flex;}
+
+  .summary-wrap{margin-bottom:22px;}
+  .summary-wrap h3{font-size:14.5px; color:var(--navy); margin-bottom:8px;}
+  td.subject-cell.busy-elsewhere .subj{color:var(--ink-soft);}
+
+  tr.merged-row td.merged-cell{text-align:left; font-weight:600; color:var(--navy); padding-left:12px;}
+  tr.merged-row.banner td.merged-cell{background:var(--prayer-bg); color:var(--prayer-ink); text-align:center; font-weight:700;}
+  .duty-cell{text-align:left; padding-left:8px; font-size:12.5px; white-space:pre-line;}
+  .merge-toggle{font-size:10.5px;}
 
   .teacher-manager{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;}
   .chip{
@@ -229,6 +240,14 @@
     .duty-scroll{max-height:none !important; overflow:visible !important; border:none;}
     table.overview thead th, table.overview th.ov-teacher{position:static !important; box-shadow:none;}
   }
+
+  #printAllWrap{display:none;}
+  body.print-all-mode #printAllWrap{display:block; padding:24px; font-family:'Source Sans 3', sans-serif; color:var(--ink);}
+  body.print-all-mode .wrap{display:none;}
+  #printAllWrap .print-page{margin-bottom:26px; page-break-after:always;}
+  #printAllWrap .print-page:last-child{page-break-after:auto;}
+  #printAllWrap table{width:100%; border-collapse:collapse; font-size:13px; margin-top:6px;}
+  #printAllWrap th, #printAllWrap td{border:1px solid var(--border); padding:7px 8px; text-align:center;}
   @media (max-width:640px){
     table{font-size:11.5px;}
     th,td{padding:5px 4px;}
@@ -249,7 +268,10 @@
     </div>
     <div class="toolbar">
       <button id="editToggle"><span id="editToggleLabel">Edit schedule</span></button>
-      <button id="printBtn">Print / Save as PDF</button>
+      <button id="saveNowBtn" class="primary">Save now</button>
+      <button id="printBtn">Print current tab</button>
+      <button id="printAllGradesBtn">PDF — all grades</button>
+      <button id="printAllTeachersBtn">PDF — all teachers</button>
       <button id="backupBtn">Download backup</button>
       <button id="restoreBtn">Restore backup</button>
       <button id="excelBtn">Download Excel</button>
@@ -259,12 +281,20 @@
   </div>
 
   <div class="edit-toolbar no-print" id="editToolbar">
-    <button class="small" id="addClassBtn">+ Add grade / class</button>
-    <div class="divider"></div>
-    <button class="small" id="addPeriodBtn">+ Add period row</button>
-    <button class="small" id="addSpecialBtn">+ Add break / prayer row</button>
-    <div class="divider"></div>
-    <span style="font-size:12.5px;color:var(--ink-soft);">Click a subject cell to assign it. Double-click a grade or teacher name to rename it.</span>
+    <span class="tb-group" id="tbClassGroup">
+      <button class="small" id="addClassBtn">+ Add grade / class</button>
+      <div class="divider"></div>
+      <button class="small" id="addPeriodBtn">+ Add period row</button>
+      <button class="small" id="addSpecialBtn">+ Add break / prayer row</button>
+    </span>
+    <span class="tb-group" id="tbTeacherGroup">
+      <span style="font-size:12.5px;color:var(--ink-soft);">Pick a grade above, then click a period to assign this teacher — or pick "ESL / Hifz (no grade)" for pull-out periods that shouldn't show on any class schedule.</span>
+    </span>
+    <span class="tb-group" id="tbRosterGroup">
+      <button class="small" id="addDutyRowBtn">+ Add duty row</button>
+    </span>
+    <div class="divider" id="tbHintDivider"></div>
+    <span style="font-size:12.5px;color:var(--ink-soft);" id="tbGeneralHint">Click any cell to edit it. Double-click a grade or teacher name to rename it.</span>
   </div>
 
   <div class="info-card">
@@ -288,6 +318,7 @@
     <div class="view-tab active" data-panel="classPanel">Student / class schedules</div>
     <div class="view-tab" data-panel="teacherPanel">Teacher schedules</div>
     <div class="view-tab" data-panel="dutyPanel">Free time overview</div>
+    <div class="view-tab" data-panel="dutyRosterPanel">Duty roster</div>
   </div>
 
   <div class="panel active" id="classPanel">
@@ -315,9 +346,13 @@
     <div class="pill-tabs no-print" id="teacherTabs"></div>
     <div class="sheet">
       <div class="sheet-head">
-        <h2 id="teacherSheetTitle">Teacher schedule</h2>
+        <h2 style="display:flex;align-items:center;gap:10px;"><span id="teacherSheetTitle">Teacher schedule</span>
+          <button class="small no-print" id="teacherEditToggle" style="font-weight:600;"></button>
+        </h2>
         <span class="assembly-note" id="teacherEditHint">Click a period to assign it — the class schedule updates automatically</span>
       </div>
+      <div class="summary-wrap" id="teacherSummaryWrap"></div>
+      <h3 style="font-size:14.5px;color:var(--navy);margin-bottom:8px;">Assign or edit by grade</h3>
       <div class="pill-tabs no-print" id="teacherClassPicker" style="margin-bottom:12px;"></div>
       <div id="teacherTableWrap"></div>
     </div>
@@ -333,8 +368,20 @@
     </div>
   </div>
 
+  <div class="panel" id="dutyRosterPanel">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Duties &amp; responsibilities</h2>
+        <span class="assembly-note">Non-teaching duties — assign or reassign any cell directly</span>
+      </div>
+      <div id="dutyRosterWrap"></div>
+    </div>
+  </div>
+
   <div class="footnote no-print" id="lastSaved"></div>
 </div>
+
+<div id="printAllWrap"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -346,6 +393,10 @@
     <label id="modalTeacherLabel">Teacher</label>
     <select id="modalTeacher"></select>
     <p id="modalConflict" style="display:none;font-size:12px;color:var(--gold);margin:8px 0 0;"></p>
+    <div id="modalAlsoApplyWrap" style="display:none;">
+      <label>Combined with other grades? (e.g. G1/2 together)</label>
+      <div id="modalAlsoApply" style="display:flex;flex-wrap:wrap;gap:6px 12px;font-size:13px;font-weight:400;color:var(--ink);"></div>
+    </div>
     <div class="modal-actions">
       <button class="danger small" id="modalClear">Mark free (X)</button>
       <div style="display:flex; gap:8px;">
@@ -357,6 +408,15 @@
 </div>
 
 <script>
+// ===================== BACKEND CONFIG =====================
+// Paste your deployed Google Apps Script Web App URL below (see the
+// Code.gs file provided alongside this app) to save data to a Google
+// Sheet instead of / in addition to this artifact's built-in storage.
+// Leave blank to keep using the built-in storage only.
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwzt_2u8ZPnvvReCEXwxgJyURqgaWW1zP4rtSZh6ucR3IjTnxAUDf5IdHxkrn4ihsO4yw/exec';
+const BACKEND_SECRET = '6585'; // must match SECRET in Code.gs, optional
+// ============================================================
+
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
 
 function uid(){ return 'r' + Math.random().toString(36).slice(2,9); }
@@ -397,6 +457,31 @@ function makeClass(name, filled){
   return {id:uid(), name, assembly:'8:35 AM', homeTime:'3:20 – 3:30', rows, cells};
 }
 
+function makeDutyRow(label, time, merged, mergedText, cells, banner){
+  const base = {Monday:'',Tuesday:'',Wednesday:'',Thursday:'',Friday:''};
+  return {id:uid(), label, time: time||'', merged: !!merged, mergedText: mergedText||'', cells: Object.assign(base, cells||{}), banner: !!banner};
+}
+
+function defaultDuties(){
+  return [
+    makeDutyRow('Morning Vans','8:15am – 8:35am', true, 'Sr. Nouha / Sr. Fathem'),
+    makeDutyRow('Prayer Hall','8:15am – 8:35am', false, '', {Monday:'Sr. Nesrin & Sr. Omnia', Tuesday:'Sr. Saba & Sr. Shefaa', Wednesday:'Sr. Sheefa & Sr. Jinan', Thursday:'Sr. Farah & Sr. Khadiga', Friday:'Sr. Shefaa & Sr. Munazira'}),
+    makeDutyRow('Kindergarten','8:15am – 8:35am', false, '', {Monday:'Sr. Lama', Tuesday:'Sr. Samiha', Wednesday:'Sr. Lama', Thursday:'Sr. Samiha', Friday:'Alternative week b/w Sr. Lama & Sr. Samiha'}),
+    makeDutyRow('Hallways / Elevator','', true, 'Sr. Fathima'),
+    makeDutyRow('Assembly','8:35am – 8:45am', true, 'ALL TEACHERS MUST BE PRESENT IN ASSEMBLY ON TIME & SUPERVISE THEIR HOMEROOM CLASS.', {}, true),
+    makeDutyRow('Assembly Duty (weekly rotation)','', true, '1st week: Sr. Munazira  ·  2nd week: Sr. Saba  ·  3rd week: Sr. Farah  ·  4th week: Sr. Fathima / Sr. Shefaa (rotational every month)'),
+    makeDutyRow('Quran & Hadith Supervision','', false, '', {Monday:'Br. Yahya', Tuesday:'Sr. Khadiga', Wednesday:'Sr. Jinan', Thursday:'Sr. Omnia', Friday:'Sr. Samiha / Sr. Lama'}),
+    makeDutyRow('Lunch Duty – Girls (Gr 7/8 room, girls 5–9)','', false, '', {Monday:'Sr. Saba', Tuesday:'Sr. Farah', Wednesday:'Sr. Farah', Thursday:'Sr. Farah', Friday:'Sr. Sheefa'}),
+    makeDutyRow('Lunch Duty – Boys (Boys Prayer Hall, boys 5–8)','', false, '', {Monday:'Sr. Farah', Tuesday:'Sr. Munazira', Wednesday:'Sr. Saba', Thursday:'Sr. Jinan', Friday:'Sr. Farah'}),
+    makeDutyRow('Lunch Duty – Grade 4','', false, '', {Monday:'', Tuesday:'', Wednesday:'Sr. Munazira', Thursday:'Sr. Omnia', Friday:'Sr. Munazira'}),
+    makeDutyRow('Wudhu Supervising','', true, 'Boys – Sr. Nouha (Gr.1–4) / Br. Yahya (Gr.5–8)  ·  Girls – Sr. Fathem'),
+    makeDutyRow('Salah Preparation','', true, 'Sr. Nesrin & Sr. Khadiga'),
+    makeDutyRow('Van Transport','', true, 'Van 1 – Sr. Omnia   ·   Van 2 – Br. Yahia   ·   Van 3 – Sr. Farah'),
+    makeDutyRow('Home Time Classroom','', false, '', {Monday:'G5 and G6 – Sr. Khadiga', Tuesday:'Gr 7/8 – Sr. Nesrin\nG6 – Sr. Shefaa', Wednesday:'Gr 7/8 – Sr. Nesrin', Thursday:'G5 – Sr. Khadiga\nG6 – Sr. Shefaa', Friday:'G7/8 – Sr. Nesrin\nG5 – Sr. Shefaa'}),
+    makeDutyRow('Elevator Duty','', true, 'Sr. Omnia & Br. Yahia'),
+  ];
+}
+
 function defaultState(){
   const gradeNames = ['Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','High School'];
   const classes = gradeNames.map((n,i)=> makeClass(n, i===0));
@@ -405,20 +490,52 @@ function defaultState(){
     logo:null,
     teachers:['Sr. Saba','Sr. Jinan'],
     classes,
+    extras: [],
+    duties: defaultDuties(),
     activeClassId: classes[0].id,
     editMode:false,
     activeTeacher:'Sr. Saba',
-    activeTeacherClassId: null
+    activeTeacherClassId: null,
+    activeView: 'classPanel'
   };
 }
 
 let state = null;
+let storageAvailable = true;
+
+function normalizeState(){
+  if(!state.extras) state.extras = [];
+  if(!state.duties) state.duties = defaultDuties();
+  if(!state.activeView) state.activeView = 'classPanel';
+}
+
+async function loadFromBackend(){
+  if(!BACKEND_URL) return false;
+  try{
+    const res = await fetch(BACKEND_URL, {method:'GET'});
+    const json = await res.json();
+    if(json && json.classes){
+      state = json;
+      normalizeState();
+      return true;
+    }
+  }catch(e){ console.warn('Backend load failed, falling back:', e); }
+  return false;
+}
 
 async function loadState(){
+  if(await loadFromBackend()) return;
+
+  if(typeof window.storage === 'undefined'){
+    storageAvailable = false;
+    state = defaultState();
+    return;
+  }
   try{
     const res = await window.storage.get('schedule', true);
     if(res && res.value){
       state = JSON.parse(res.value);
+      normalizeState();
       return;
     }
   }catch(e){}
@@ -426,18 +543,58 @@ async function loadState(){
 }
 
 let saveTimer = null;
+
+async function performSave(){
+  const el = document.getElementById('lastSaved');
+  let backendOk = null;
+  if(BACKEND_URL){
+    try{
+      await fetch(BACKEND_URL, {
+        method:'POST',
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({secret: BACKEND_SECRET, data: state})
+      });
+      backendOk = true;
+    }catch(e){ backendOk = false; }
+  }
+
+  if(!storageAvailable){
+    if(el) el.textContent = backendOk===true
+      ? 'Saved to Google Sheet ' + new Date().toLocaleTimeString()
+      : (BACKEND_URL ? 'Could not reach the backend — download a backup to be safe.' : 'Auto-save unavailable here — use "Download backup" and "Restore backup" instead.');
+    return backendOk===true;
+  }
+
+  try{
+    await window.storage.set('schedule', JSON.stringify(state), true);
+    if(el) el.textContent = backendOk===true
+      ? 'Saved (Sheet + built-in) ' + new Date().toLocaleTimeString()
+      : 'Saved ' + new Date().toLocaleTimeString();
+    return true;
+  }catch(e){
+    if(el) el.textContent = 'Could not save (changes stay for this session) — download a backup to be safe.';
+    return backendOk===true;
+  }
+}
+
 function scheduleSave(){
   const el = document.getElementById('lastSaved');
   if(el) el.textContent = 'Saving…';
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async ()=>{
-    try{
-      await window.storage.set('schedule', JSON.stringify(state), true);
-      if(el) el.textContent = 'Saved ' + new Date().toLocaleTimeString();
-    }catch(e){
-      if(el) el.textContent = 'Could not save (changes stay for this session)';
-    }
-  }, 500);
+  saveTimer = setTimeout(performSave, 500);
+}
+
+async function saveNow(){
+  clearTimeout(saveTimer);
+  const btn = document.getElementById('saveNowBtn');
+  const original = btn ? btn.textContent : null;
+  if(btn){ btn.textContent = 'Saving…'; btn.disabled = true; }
+  const ok = await performSave();
+  if(btn){
+    btn.textContent = ok ? 'Saved ✓' : 'Save failed';
+    btn.disabled = false;
+    setTimeout(()=>{ btn.textContent = original; }, 1800);
+  }
 }
 
 function activeClass(){ return state.classes.find(c=>c.id===state.activeClassId) || state.classes[0]; }
@@ -448,10 +605,16 @@ function render(){
   document.getElementById('editToggleLabel').textContent = state.editMode ? 'Done editing' : 'Edit schedule';
   setEditableText('fSchool', state.school);
   document.querySelectorAll('#fSchool').forEach(el=> el.setAttribute('contenteditable', state.editMode?'true':'false'));
-  document.getElementById('storageNote').textContent =
-    'Saved automatically in this page\'s shared storage — anyone who opens this exact link can view and edit it. Use "Download backup" for your own offline copy.';
+  document.getElementById('storageNote').textContent = BACKEND_URL
+    ? 'Saving to your connected Google Sheet backend.' + (storageAvailable ? ' Also cached in built-in storage as a fallback.' : '')
+    : (storageAvailable
+      ? 'Saved automatically in this page\'s shared storage — anyone who opens this exact link can view and edit it. Use "Download backup" regularly for your own offline copy.'
+      : 'Auto-save is not available in this browser view — your edits only last for this session. Please use "Download backup" when you\'re done, and "Restore backup" to load it back in next time.');
 
   renderLogo();
+  document.querySelectorAll('.view-tab').forEach(t=> t.classList.toggle('active', t.dataset.panel===state.activeView));
+  document.querySelectorAll('.panel').forEach(p=> p.classList.toggle('active', p.id===state.activeView));
+  updateToolbarVisibility();
 
   if(!state.classes.find(c=>c.id===state.activeClassId)) state.activeClassId = state.classes[0] ? state.classes[0].id : null;
 
@@ -461,6 +624,17 @@ function render(){
   renderTeacherTabs();
   renderTeacherPanel();
   renderDutyPanel();
+  renderDutyRoster();
+}
+
+function updateToolbarVisibility(){
+  const groups = {classPanel:'tbClassGroup', teacherPanel:'tbTeacherGroup', dutyRosterPanel:'tbRosterGroup'};
+  ['tbClassGroup','tbTeacherGroup','tbRosterGroup'].forEach(id=>{
+    document.getElementById(id).classList.remove('active');
+  });
+  const activeGroup = groups[state.activeView];
+  if(activeGroup) document.getElementById(activeGroup).classList.add('active');
+  document.getElementById('tbHintDivider').style.display = activeGroup ? 'block' : 'none';
 }
 
 function renderLogo(){
@@ -675,10 +849,12 @@ let modalTarget = null;
 function findClass(classId){ return state.classes.find(c=>c.id===classId); }
 
 function openCellModal(classId, rowId, day, lockTeacher){
-  modalTarget = {classId, rowId, day, lockTeacher};
+  modalTarget = {kind:'class', classId, rowId, day, lockTeacher};
   const cls = findClass(classId);
+  const row = cls.rows.find(r=>r.id===rowId);
   const c = cls.cells[cellKey(rowId,day)] || {subject:'', teacher: lockTeacher || state.teachers[0] || ''};
   document.getElementById('modalSubject').value = c.subject || '';
+  document.getElementById('modalTitle').textContent = 'Edit period';
 
   const sel = document.getElementById('modalTeacher');
   sel.innerHTML = state.teachers.map(t=>'<option value="'+escAttr(t)+'">'+esc(t)+'</option>').join('');
@@ -702,29 +878,96 @@ function openCellModal(classId, rowId, day, lockTeacher){
     conflictEl.style.display = 'none';
   }
 
+  // "Also assign to other grades" — for combined lessons like G1/2 together
+  const wrap = document.getElementById('modalAlsoApplyWrap');
+  const applyEl = document.getElementById('modalAlsoApply');
+  const otherMatches = row ? state.classes.filter(oc=> oc.id!==classId && oc.rows.some(r=>r.type==='period' && r.num===row.num)) : [];
+  if(row && otherMatches.length){
+    wrap.style.display = 'block';
+    applyEl.innerHTML = otherMatches.map(oc=>{
+      const orow = oc.rows.find(r=>r.type==='period' && r.num===row.num);
+      const oc_c = oc.cells[cellKey(orow.id, day)];
+      const checked = oc_c && oc_c.subject===c.subject && oc_c.teacher===(lockTeacher||c.teacher) && c.subject;
+      return '<label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" data-also-class="'+oc.id+'" data-also-row="'+orow.id+'"'+(checked?' checked':'')+'> '+esc(oc.name)+'</label>';
+    }).join('');
+  } else {
+    wrap.style.display = 'none';
+    applyEl.innerHTML = '';
+  }
+
   document.getElementById('cellModal').classList.add('open');
   document.getElementById('modalSubject').focus();
 }
+
+function openExtraModal(teacher, day, periodNum){
+  modalTarget = {kind:'extra', teacher, day, periodNum};
+  const existing = findExtra(teacher, day, periodNum);
+  document.getElementById('modalSubject').value = existing ? existing.subject : '';
+  document.getElementById('modalTitle').textContent = 'ESL / Hifz — no grade assigned yet';
+
+  const sel = document.getElementById('modalTeacher');
+  sel.innerHTML = '<option value="'+escAttr(teacher)+'">'+esc(teacher)+'</option>';
+  sel.value = teacher;
+  sel.disabled = true;
+  document.getElementById('modalTeacherLabel').textContent = 'Teacher';
+  document.getElementById('modalConflict').style.display = 'none';
+  document.getElementById('modalAlsoApplyWrap').style.display = 'none';
+  document.getElementById('modalAlsoApply').innerHTML = '';
+
+  document.getElementById('cellModal').classList.add('open');
+  document.getElementById('modalSubject').focus();
+}
+
 function closeCellModal(){
   document.getElementById('cellModal').classList.remove('open');
   modalTarget = null;
 }
 function saveCellModal(){
   if(!modalTarget) return;
-  const cls = findClass(modalTarget.classId);
   const subject = document.getElementById('modalSubject').value.trim();
+
+  if(modalTarget.kind==='extra'){
+    removeExtra(modalTarget.teacher, modalTarget.day, modalTarget.periodNum);
+    if(subject) state.extras.push({id:uid(), teacher:modalTarget.teacher, day:modalTarget.day, periodNum:modalTarget.periodNum, subject});
+    scheduleSave();
+    closeCellModal();
+    renderTeacherPanel(); renderDutyPanel();
+    return;
+  }
+
+  const cls = findClass(modalTarget.classId);
   const teacher = modalTarget.lockTeacher || document.getElementById('modalTeacher').value;
   if(!subject){
     delete cls.cells[cellKey(modalTarget.rowId, modalTarget.day)];
   } else {
     cls.cells[cellKey(modalTarget.rowId, modalTarget.day)] = {subject, teacher};
   }
+
+  // fan out to / clear from other grades marked as "also assign to"
+  document.querySelectorAll('#modalAlsoApply input[type="checkbox"]').forEach(cb=>{
+    const oc = findClass(cb.dataset.alsoClass);
+    if(!oc) return;
+    const key = cellKey(cb.dataset.alsoRow, modalTarget.day);
+    if(cb.checked && subject){
+      oc.cells[key] = {subject, teacher};
+    } else if(!cb.checked && oc.cells[key] && oc.cells[key].subject===subject && oc.cells[key].teacher===teacher){
+      delete oc.cells[key];
+    }
+  });
+
   scheduleSave();
   closeCellModal();
   renderClassTable(); renderTeacherManager(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel();
 }
 function clearCellModal(){
   if(!modalTarget) return;
+  if(modalTarget.kind==='extra'){
+    removeExtra(modalTarget.teacher, modalTarget.day, modalTarget.periodNum);
+    scheduleSave();
+    closeCellModal();
+    renderTeacherPanel(); renderDutyPanel();
+    return;
+  }
   const cls = findClass(modalTarget.classId);
   delete cls.cells[cellKey(modalTarget.rowId, modalTarget.day)];
   scheduleSave();
@@ -732,11 +975,19 @@ function clearCellModal(){
   renderClassTable(); renderTeacherPanel(); renderDutyPanel();
 }
 
+function findExtra(teacher, day, periodNum){
+  return (state.extras||[]).find(e=> e.teacher===teacher && e.day===day && e.periodNum===periodNum);
+}
+function removeExtra(teacher, day, periodNum){
+  state.extras = (state.extras||[]).filter(e=> !(e.teacher===teacher && e.day===day && e.periodNum===periodNum));
+}
+
 function allTeachersInUse(){
   const set = new Set(state.teachers);
   state.classes.forEach(cls=>{
     Object.values(cls.cells).forEach(c=>{ if(c.teacher) set.add(c.teacher); });
   });
+  (state.extras||[]).forEach(e=> set.add(e.teacher));
   return Array.from(set);
 }
 
@@ -752,14 +1003,118 @@ function abbrevClass(name){
   return String(name).split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,4) || name;
 }
 
-function findAssignment(teacher, day, periodNum){
+function findAssignmentsRaw(teacher, day, periodNum){
+  const matches = [];
   for(const cls of state.classes){
     const row = cls.rows.find(r=>r.type==='period' && r.num===periodNum);
     if(!row) continue;
     const c = cls.cells[cellKey(row.id, day)];
-    if(c && c.teacher===teacher) return {subject:c.subject, className:cls.name};
+    if(c && c.teacher===teacher) matches.push({subject:c.subject, className:cls.name});
   }
-  return null;
+  const ex = findExtra(teacher, day, periodNum);
+  if(ex) matches.push({subject: ex.subject, className: 'ESL/Hifz (no grade)'});
+  return matches;
+}
+
+function findAssignment(teacher, day, periodNum){
+  const matches = findAssignmentsRaw(teacher, day, periodNum);
+  if(matches.length===0) return null;
+  if(matches.length===1) return matches[0];
+
+  const bySubject = {};
+  matches.forEach(m=>{ (bySubject[m.subject] = bySubject[m.subject]||[]).push(m.className); });
+  const subjects = Object.keys(bySubject);
+  if(subjects.length===1){
+    const grades = bySubject[subjects[0]].map(abbrevClass).join('/');
+    return {subject: subjects[0], className: grades};
+  }
+  const combined = matches.map(m=> m.subject+' ('+abbrevClass(m.className)+')').join('; ');
+  return {subject: combined, className: ''};
+}
+
+function teacherSummaryHtml(teacher, short){
+  const maxPeriod = getMaxPeriod();
+  let html = '<h3 style="font-family:\'Lora\',serif;color:var(--navy);font-size:'+(short?'15px':'18px')+';margin:0 0 8px;">'+
+    esc(teacher) + (short ? ' — full weekly schedule (all grades combined)' : ' — full weekly schedule') + '</h3>';
+  html += '<table><thead><tr><th style="min-width:70px;">Period</th>';
+  DAYS.forEach(d=> html += '<th>'+d+'</th>');
+  html += '</tr></thead><tbody>';
+  for(let p=1;p<=maxPeriod;p++){
+    html += '<tr><th>Period '+p+'</th>';
+    DAYS.forEach(day=>{
+      const a = findAssignment(teacher, day, p);
+      if(a){
+        html += '<td class="subject-cell"><span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span></td>';
+      } else {
+        html += '<td class="subject-cell empty-x">Free</td>';
+      }
+    });
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+function classTableHtml(cls){
+  let html = '<h2 style="font-family:\'Lora\',serif;color:var(--navy);font-size:18px;margin:0 0 4px;">'+esc(cls.name)+' — weekly schedule</h2>';
+  html += '<p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">Morning assembly '+esc(cls.assembly)+' &middot; Home time '+esc(cls.homeTime)+'</p>';
+  html += '<table><thead><tr><th style="min-width:70px;">Period</th><th>Time</th>';
+  DAYS.forEach(d=> html += '<th>'+d+'</th>');
+  html += '</tr></thead><tbody>';
+  cls.rows.forEach(row=>{
+    if(row.type==='special'){
+      html += '<tr class="special-row'+(row.prayer?' prayer':'')+'">';
+      html += '<td colspan="2" class="special-cell">'+esc(row.name)+'</td>';
+      html += '<td colspan="'+DAYS.length+'" class="special-cell">'+esc(row.time)+'</td>';
+      html += '</tr>';
+    } else {
+      html += '<tr><th>Period '+row.num+'</th><td><span class="time-cell">'+esc(row.time)+'</span></td>';
+      DAYS.forEach(day=>{
+        const c = cls.cells[cellKey(row.id, day)];
+        if(c && c.subject){
+          html += '<td class="subject-cell"><span class="subj">'+esc(c.subject)+'</span><span class="teach">'+esc(c.teacher||'')+'</span></td>';
+        } else {
+          html += '<td class="subject-cell empty-x">—</td>';
+        }
+      });
+      html += '</tr>';
+    }
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function printAllGrades(){
+  const wrap = document.getElementById('printAllWrap');
+  let html = '<h1 style="font-family:\'Lora\',serif;color:var(--navy);margin-bottom:4px;">'+esc(state.school)+'</h1>'+
+    '<p style="color:var(--ink-soft);margin-top:0;">All grade schedules</p>';
+  state.classes.forEach(cls=>{
+    html += '<div class="print-page">'+classTableHtml(cls)+'</div>';
+  });
+  wrap.innerHTML = html;
+  document.body.classList.add('print-all-mode');
+  window.print();
+  document.body.classList.remove('print-all-mode');
+  wrap.innerHTML = '';
+}
+
+function printAllTeachers(){
+  const wrap = document.getElementById('printAllWrap');
+  const teachers = allTeachersInUse();
+  let html = '<h1 style="font-family:\'Lora\',serif;color:var(--navy);margin-bottom:4px;">'+esc(state.school)+'</h1>'+
+    '<p style="color:var(--ink-soft);margin-top:0;">All teacher schedules</p>';
+  if(teachers.length===0){
+    html += '<p>No teachers yet.</p>';
+  } else {
+    teachers.forEach(t=>{
+      html += '<div class="print-page">'+teacherSummaryHtml(t, false)+'</div>';
+    });
+  }
+  wrap.innerHTML = html;
+  document.body.classList.add('print-all-mode');
+  window.print();
+  document.body.classList.remove('print-all-mode');
+  wrap.innerHTML = '';
 }
 
 function renderDutyPanel(){
@@ -790,6 +1145,104 @@ function renderDutyPanel(){
   });
   html += '</tbody></table>';
   wrap.innerHTML = html;
+}
+
+function renderDutyRoster(){
+  const wrap = document.getElementById('dutyRosterWrap');
+  if(!wrap) return;
+  const rows = state.duties || [];
+  let html = '<table><thead><tr><th style="min-width:150px;">Duty</th><th>Time</th>';
+  DAYS.forEach(d=> html += '<th>'+d+'</th>');
+  html += '<th class="no-print" style="width:70px;"></th></tr></thead><tbody>';
+
+  rows.forEach(row=>{
+    html += '<tr data-duty="'+row.id+'"'+(row.banner ? ' class="merged-row banner"' : (row.merged ? ' class="merged-row"' : ''))+'>';
+    html += '<th class="duty-label" data-duty="'+row.id+'" data-field="label"'+(state.editMode ? ' contenteditable="true"' : '')+'>'+esc(row.label)+'</th>';
+    html += '<td class="duty-time" data-duty="'+row.id+'" data-field="time"'+(state.editMode ? ' contenteditable="true"' : '')+'><span class="time-cell">'+esc(row.time)+'</span></td>';
+    if(row.merged){
+      html += '<td colspan="'+DAYS.length+'" class="merged-cell" data-duty="'+row.id+'" data-field="mergedText"'+(state.editMode ? ' contenteditable="true"' : '')+'>'+esc(row.mergedText)+'</td>';
+    } else {
+      DAYS.forEach(day=>{
+        html += '<td class="duty-cell" data-duty="'+row.id+'" data-day="'+day+'"'+(state.editMode ? ' contenteditable="true"' : '')+'>'+esc(row.cells[day]||'')+'</td>';
+      });
+    }
+    if(state.editMode){
+      html += '<td class="no-print" style="border:none;background:transparent;padding:2px;"><div class="row-controls">'+
+        '<button class="ghost merge-toggle" data-duty="'+row.id+'" title="'+(row.merged?'Split into days':'Merge into one cell')+'">'+(row.merged?'⇔':'⇒')+'</button>'+
+        '<button class="ghost duty-up" data-duty="'+row.id+'" title="Move up">&uarr;</button>'+
+        '<button class="ghost duty-down" data-duty="'+row.id+'" title="Move down">&darr;</button>'+
+        '<button class="ghost duty-del" data-duty="'+row.id+'" title="Delete row">&times;</button>'+
+        '</div></td>';
+    }
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  if(state.editMode){
+    wrap.querySelectorAll('[data-field]').forEach(el=>{
+      el.addEventListener('blur', onDutyFieldEdit);
+    });
+    wrap.querySelectorAll('td.duty-cell').forEach(el=>{
+      el.addEventListener('blur', onDutyCellEdit);
+    });
+    wrap.querySelectorAll('.merge-toggle').forEach(b=> b.addEventListener('click', ()=> toggleDutyMerge(b.dataset.duty)));
+    wrap.querySelectorAll('.duty-up').forEach(b=> b.addEventListener('click', ()=> moveDutyRow(b.dataset.duty,-1)));
+    wrap.querySelectorAll('.duty-down').forEach(b=> b.addEventListener('click', ()=> moveDutyRow(b.dataset.duty,1)));
+    wrap.querySelectorAll('.duty-del').forEach(b=> b.addEventListener('click', ()=> deleteDutyRow(b.dataset.duty)));
+  }
+}
+
+function findDuty(id){ return (state.duties||[]).find(r=>r.id===id); }
+
+function onDutyFieldEdit(e){
+  const row = findDuty(e.target.dataset.duty);
+  if(!row) return;
+  row[e.target.dataset.field] = e.target.textContent.trim();
+  scheduleSave();
+}
+
+function onDutyCellEdit(e){
+  const row = findDuty(e.target.dataset.duty);
+  if(!row) return;
+  row.cells[e.target.dataset.day] = e.target.textContent.trim();
+  scheduleSave();
+}
+
+function toggleDutyMerge(id){
+  const row = findDuty(id);
+  if(!row) return;
+  if(row.merged){
+    row.merged = false;
+    DAYS.forEach((d,i)=>{ row.cells[d] = i===0 ? row.mergedText : ''; });
+  } else {
+    row.mergedText = DAYS.map(d=> row.cells[d]).filter(Boolean).join('  ·  ');
+  }
+  scheduleSave();
+  renderDutyRoster();
+}
+
+function moveDutyRow(id, dir){
+  const rows = state.duties;
+  const i = rows.findIndex(r=>r.id===id);
+  const j = i+dir;
+  if(j<0 || j>=rows.length) return;
+  const tmp = rows[i]; rows[i]=rows[j]; rows[j]=tmp;
+  scheduleSave();
+  renderDutyRoster();
+}
+
+function deleteDutyRow(id){
+  if(!confirm('Delete this duty row?')) return;
+  state.duties = state.duties.filter(r=>r.id!==id);
+  scheduleSave();
+  renderDutyRoster();
+}
+
+function addDutyRow(){
+  state.duties.push(makeDutyRow('New duty', '', false));
+  scheduleSave();
+  renderDutyRoster();
 }
 
 function sanitizeSheetName(name){
@@ -836,6 +1289,17 @@ function buildWorkbook(){
   });
   const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
   XLSX.utils.book_append_sheet(wb, ws2, 'Teacher Overview');
+
+  const aoa3 = [['Duty','Time','Monday','Tuesday','Wednesday','Thursday','Friday']];
+  (state.duties||[]).forEach(row=>{
+    if(row.merged){
+      aoa3.push([row.label, row.time, row.mergedText, '', '', '', '']);
+    } else {
+      aoa3.push([row.label, row.time, row.cells.Monday||'', row.cells.Tuesday||'', row.cells.Wednesday||'', row.cells.Thursday||'', row.cells.Friday||'']);
+    }
+  });
+  const ws3 = XLSX.utils.aoa_to_sheet(aoa3);
+  XLSX.utils.book_append_sheet(wb, ws3, 'Duty Roster');
 
   return wb;
 }
@@ -917,39 +1381,79 @@ function renderTeacherTabs(){
 
 function renderTeacherPanel(){
   const wrap = document.getElementById('teacherTableWrap');
+  const summaryWrap = document.getElementById('teacherSummaryWrap');
   const pickerEl = document.getElementById('teacherClassPicker');
   const teacher = state.activeTeacher;
   document.getElementById('teacherSheetTitle').textContent = teacher ? teacher + ' — weekly schedule' : 'Teacher schedule';
+  document.getElementById('teacherEditToggle').textContent = state.editMode ? 'Done editing' : '✎ Edit ' + (teacher||'schedule');
   document.getElementById('teacherEditHint').textContent = state.editMode
     ? 'Click a period below to assign it — the class schedule updates automatically'
     : 'Switch to edit mode to assign periods from here';
 
   if(!teacher){
+    if(summaryWrap) summaryWrap.innerHTML = '';
     pickerEl.innerHTML = '';
     wrap.innerHTML = '<p style="color:var(--ink-soft);font-size:13.5px;">No teachers yet. Switch to edit mode to add one.</p>';
     return;
   }
 
+  // --- Full combined schedule (read-only, every grade + ESL/Hifz at a glance) ---
+  if(summaryWrap){
+    summaryWrap.innerHTML = teacherSummaryHtml(teacher, true);
+  }
+
   const classesTaught = new Set(state.classes.filter(cls=>
     Object.values(cls.cells).some(c=> c.teacher===teacher)
   ).map(c=>c.id));
+  const hasExtras = (state.extras||[]).some(e=> e.teacher===teacher);
 
-  if(!state.activeTeacherClassId || !state.classes.find(c=>c.id===state.activeTeacherClassId)){
-    const first = state.classes.find(c=> classesTaught.has(c.id)) || state.classes[0];
-    state.activeTeacherClassId = first ? first.id : null;
+  if(!state.activeTeacherClassId || (state.activeTeacherClassId!=='GENERAL' && !state.classes.find(c=>c.id===state.activeTeacherClassId))){
+    const first = state.classes.find(c=> classesTaught.has(c.id)) || (hasExtras ? null : state.classes[0]);
+    state.activeTeacherClassId = first ? first.id : (hasExtras ? 'GENERAL' : (state.classes[0] ? state.classes[0].id : null));
   }
 
-  pickerEl.innerHTML = state.classes.map(c=>
+  let pickerHtml = state.classes.map(c=>
     '<span class="p-tab'+(c.id===state.activeTeacherClassId?' active':'')+'" data-class="'+c.id+'">'+
       esc(c.name) + (classesTaught.has(c.id) ? '' : '<span style="opacity:.55;font-weight:400;"> · none yet</span>') +
     '</span>'
   ).join('');
+  pickerHtml += '<span class="p-tab'+(state.activeTeacherClassId==='GENERAL'?' active':'')+'" data-class="GENERAL" style="border-color:var(--gold);">ESL / Hifz (no grade)'+
+    (hasExtras ? '' : '<span style="opacity:.55;font-weight:400;"> · none yet</span>') + '</span>';
+  pickerEl.innerHTML = pickerHtml;
   pickerEl.querySelectorAll('.p-tab').forEach(tab=>{
     tab.addEventListener('click', ()=>{
       state.activeTeacherClassId = tab.dataset.class;
       renderTeacherPanel();
     });
   });
+
+  if(state.activeTeacherClassId==='GENERAL'){
+    const maxPeriod = getMaxPeriod();
+    let html = '<p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">For ESL, Hifz, or any pull-out group that mixes students from several grades — assigned here only, never on a class schedule.</p>';
+    html += '<table><thead><tr><th style="min-width:70px;">Period</th>';
+    DAYS.forEach(d=> html += '<th>'+d+'</th>');
+    html += '</tr></thead><tbody>';
+    for(let p=1;p<=maxPeriod;p++){
+      html += '<tr><th>Period '+p+'</th>';
+      DAYS.forEach(day=>{
+        const ex = findExtra(teacher, day, p);
+        if(ex){
+          html += '<td class="subject-cell" data-period="'+p+'" data-day="'+day+'"><span class="subj">'+esc(ex.subject)+'</span></td>';
+        } else {
+          html += '<td class="subject-cell empty-x" data-period="'+p+'" data-day="'+day+'">X</td>';
+        }
+      });
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    if(state.editMode){
+      wrap.querySelectorAll('td.subject-cell').forEach(td=>{
+        td.addEventListener('click', ()=> openExtraModal(teacher, td.dataset.day, parseInt(td.dataset.period,10)));
+      });
+    }
+    return;
+  }
 
   const cls = state.classes.find(c=>c.id===state.activeTeacherClassId);
   if(!cls){ wrap.innerHTML = ''; return; }
@@ -991,7 +1495,15 @@ function bindStatic(){
     scheduleSave();
     render();
   });
+  document.getElementById('teacherEditToggle').addEventListener('click', ()=>{
+    state.editMode = !state.editMode;
+    scheduleSave();
+    render();
+  });
   document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+  document.getElementById('printAllGradesBtn').addEventListener('click', printAllGrades);
+  document.getElementById('printAllTeachersBtn').addEventListener('click', printAllTeachers);
+  document.getElementById('saveNowBtn').addEventListener('click', saveNow);
   document.getElementById('resetBtn').addEventListener('click', ()=>{
     if(!confirm('Reset to the sample schedule? This replaces all current data, all grades.')) return;
     state = defaultState();
@@ -1001,6 +1513,7 @@ function bindStatic(){
   document.getElementById('addPeriodBtn').addEventListener('click', addPeriodRow);
   document.getElementById('addSpecialBtn').addEventListener('click', addSpecialRow);
   document.getElementById('addClassBtn').addEventListener('click', addClass);
+  document.getElementById('addDutyRowBtn').addEventListener('click', addDutyRow);
 
   document.querySelectorAll('.view-tab').forEach(tab=>{
     tab.addEventListener('click', ()=>{
@@ -1008,6 +1521,8 @@ function bindStatic(){
       document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(tab.dataset.panel).classList.add('active');
+      state.activeView = tab.dataset.panel;
+      updateToolbarVisibility();
     });
   });
 
