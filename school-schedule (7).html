@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>School Schedule Builder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#1c3a5e;
+    --navy-2:#274b74;
+    --gold:#b8862c;
+    --gold-light:#f4e2bb;
+    --cream:#faf8f2;
+    --paper:#ffffff;
+    --ink:#25272b;
+    --ink-soft:#5b5d63;
+    --border:#d9d3c2;
+    --border-soft:#e8e3d5;
+    --break-bg:#dcebf5;
+    --break-ink:#1b4a68;
+    --prayer-bg:#f6dd9c;
+    --prayer-ink:#6b4a05;
+    --x-bg:#eeece5;
+    --x-ink:#9a978c;
+    --danger:#a3372c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--cream);
+    color:var(--ink);
+    font-family:'Source Sans 3', system-ui, sans-serif;
+    padding:28px 20px 80px;
+  }
+  h1,h2,h3{font-family:'Lora', Georgia, serif; margin:0;}
+  .wrap{max-width:1100px;margin:0 auto;}
+
+  .topbar{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:16px; margin-bottom:22px; flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .crest{
+    width:44px;height:44px;border-radius:50%;
+    background:var(--navy); color:var(--gold-light);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Lora',serif; font-weight:700; font-size:18px;
+    flex-shrink:0;
+  }
+  .brand-text .app-title{font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); font-weight:600;}
+  .brand-text .app-sub{font-size:12px; color:var(--ink-soft);}
+
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap;}
+  button{
+    font-family:'Source Sans 3', sans-serif;
+    font-size:13.5px; font-weight:600;
+    border-radius:6px; border:1px solid var(--border);
+    background:var(--paper); color:var(--navy);
+    padding:9px 14px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  button:hover{border-color:var(--navy-2); background:#f4f1e9;}
+  button.primary{background:var(--navy); color:#fff; border-color:var(--navy);}
+  button.primary:hover{background:var(--navy-2);}
+  button.ghost{background:transparent; border-color:transparent; color:var(--ink-soft); padding:6px 8px;}
+  button.ghost:hover{background:var(--x-bg); color:var(--ink);}
+  button.danger{color:var(--danger); border-color:#e2c3bd;}
+  button.danger:hover{background:#fbeceb;}
+  button.small{padding:5px 9px; font-size:12px;}
+
+  .info-card{
+    background:var(--paper); border:1px solid var(--border); border-radius:10px;
+    padding:16px 22px; margin-bottom:20px;
+    display:flex; flex-wrap:wrap; gap:18px 32px; align-items:baseline;
+  }
+  .info-field{display:flex; flex-direction:column; gap:2px;}
+  .info-field label{font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); font-weight:600;}
+  .logo-row{display:flex; align-items:center; gap:10px;}
+  .logo-box{
+    width:52px; height:52px; border-radius:8px; overflow:hidden;
+    background:#f2efe4; border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Lora',serif; font-weight:700; font-size:20px; color:var(--navy);
+  }
+  .logo-box img{width:100%; height:100%; object-fit:cover;}
+  .logo-controls{display:flex; gap:6px;}
+
+  table.overview th.ov-teacher{text-align:left; white-space:nowrap;}
+  table.overview td.ov-free{background:#e5f3e0; color:#2e6b1f; font-weight:600; font-size:11.5px;}
+  table.overview td.ov-busy{font-size:11px; text-align:left; padding-left:6px;}
+  table.overview thead tr.ov-days th{background:var(--gold); color:#4a3400;}
+  .editable{
+    font-family:'Lora',serif; font-size:19px; font-weight:600; color:var(--navy);
+    border:none; background:transparent; outline:none; min-width:60px;
+  }
+  .editable.small{font-family:'Source Sans 3',sans-serif; font-size:14px; font-weight:600;}
+  .edit-mode .editable{
+    background:var(--gold-light); border-radius:4px; padding:2px 6px; cursor:text;
+  }
+
+  .view-tabs{display:flex; gap:6px; margin-bottom:16px;}
+  .view-tab{
+    padding:9px 16px; border-radius:7px 7px 0 0; border:1px solid var(--border); border-bottom:none;
+    background:#efece1; color:var(--ink-soft); font-weight:600; font-size:13.5px; cursor:pointer;
+  }
+  .view-tab.active{background:var(--paper); color:var(--navy); border-color:var(--border);}
+
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .sheet{
+    background:var(--paper); border:1px solid var(--border); border-radius:0 8px 8px 8px;
+    padding:22px; box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  .sheet-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;}
+  .sheet-head h2{font-size:19px; color:var(--navy);}
+  .sheet-head .assembly-note{font-size:12.5px; color:var(--ink-soft); font-style:italic;}
+  .sheet-sub{display:flex; gap:18px; flex-wrap:wrap; margin-bottom:14px;}
+  .sheet-sub .info-field label{font-size:10.5px;}
+  .sheet-sub .editable{font-size:14px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th,td{border:1px solid var(--border); padding:8px 9px; text-align:center; vertical-align:middle;}
+  thead th{
+    background:var(--navy); color:#fff; font-weight:600; font-size:12.5px;
+    text-transform:uppercase; letter-spacing:.04em;
+  }
+  tbody th{background:#f2efe4; color:var(--navy); font-weight:700; white-space:nowrap;}
+  .time-cell{font-size:11.5px; color:var(--ink-soft); display:block;}
+  td.subject-cell{position:relative; min-width:96px;}
+  .subj{font-weight:600; color:var(--ink);}
+  .teach{display:block; font-size:11px; color:var(--ink-soft); margin-top:1px;}
+  td.empty-x{background:var(--x-bg); color:var(--x-ink); font-weight:700;}
+  tr.special-row td.special-cell{
+    background:var(--break-bg); color:var(--break-ink); font-weight:700;
+    letter-spacing:.02em; text-transform:uppercase; font-size:12.5px;
+  }
+  tr.special-row.prayer td.special-cell{background:var(--prayer-bg); color:var(--prayer-ink);}
+  .edit-mode td.subject-cell{cursor:pointer;}
+  .edit-mode td.subject-cell:hover{outline:2px solid var(--gold); outline-offset:-2px;}
+  .row-controls{display:flex; gap:3px; justify-content:center;}
+
+  .pill-tabs{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; align-items:center;}
+  .p-tab{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 8px 6px 13px; border-radius:16px; border:1px solid var(--border);
+    background:#f2efe4; color:var(--navy); font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .p-tab.active{background:var(--navy); color:#fff; border-color:var(--navy);}
+  .p-tab .p-del{border:none; background:transparent; color:inherit; opacity:.6; font-size:13px; padding:0 3px; border-radius:50%; cursor:pointer;}
+  .p-tab .p-del:hover{opacity:1; background:rgba(0,0,0,.15);}
+  .p-tab[contenteditable="true"]{cursor:text;}
+
+  .edit-toolbar{
+    display:none; flex-wrap:wrap; gap:8px; align-items:center;
+    background:#fbf6e9; border:1px dashed var(--gold); border-radius:8px;
+    padding:12px 14px; margin-bottom:16px;
+  }
+  .edit-mode .edit-toolbar{display:flex;}
+  .edit-toolbar .divider{width:1px; height:22px; background:var(--border);}
+
+  .teacher-manager{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    background:#f2efe4; border:1px solid var(--border); border-radius:16px;
+    padding:5px 6px 5px 12px; font-size:13px; color:var(--navy); font-weight:600;
+  }
+  .chip[contenteditable="true"]{outline:none;}
+  .chip button{padding:2px 5px; border:none; background:transparent; color:var(--ink-soft); font-size:12px; border-radius:50%;}
+  .chip button:hover{background:#e3ded0; color:var(--danger);}
+  .add-teacher-form{display:flex; gap:6px; align-items:center;}
+  .add-teacher-form input{
+    border:1px solid var(--border); border-radius:16px; padding:6px 12px; font-size:13px; font-family:inherit;
+  }
+
+  .agenda-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
+  .agenda-day{border:1px solid var(--border); border-radius:8px; overflow:hidden;}
+  .agenda-day-head{background:var(--navy); color:#fff; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:7px 10px;}
+  .agenda-entry{padding:8px 10px; border-top:1px solid var(--border-soft);}
+  .agenda-entry:first-child{border-top:none;}
+  .agenda-time{font-size:11px; color:var(--ink-soft); display:block;}
+  .agenda-subject{font-weight:600; font-size:13px; color:var(--ink);}
+  .agenda-class{font-size:11.5px; color:var(--gold); font-weight:600; display:block;}
+  .agenda-empty{padding:14px 10px; text-align:center; color:var(--x-ink); font-size:12.5px;}
+
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(20,20,15,.45);
+    align-items:center; justify-content:center; z-index:50;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:#fff; border-radius:10px; padding:22px 24px; width:320px;
+    box-shadow:0 12px 30px rgba(0,0,0,.25);
+  }
+  .modal h3{font-size:16px; color:var(--navy); margin-bottom:14px;}
+  .modal label{display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin:12px 0 4px;}
+  .modal input, .modal select{
+    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px;
+    font-family:inherit; font-size:14px;
+  }
+  .modal .modal-actions{display:flex; justify-content:space-between; gap:8px; margin-top:20px;}
+
+  .footnote{font-size:11.5px; color:var(--ink-soft); margin-top:14px; text-align:right;}
+  .storage-note{font-size:12px; color:var(--ink-soft); margin:-8px 0 20px;}
+
+  @media print{
+    body{padding:0; background:#fff;}
+    .no-print{display:none !important;}
+    .sheet{border:none; box-shadow:none; padding:0;}
+    .wrap{max-width:100%;}
+    .view-tab{display:none;}
+    thead th{background:var(--navy) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    tbody th{background:#f2efe4 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    tr.special-row td.special-cell{background:var(--break-bg) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    tr.special-row.prayer td.special-cell{background:var(--prayer-bg) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    td.empty-x{background:var(--x-bg) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    .agenda-day-head{background:var(--navy) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    table.overview td.ov-free{background:#e5f3e0 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    table.overview thead tr.ov-days th{background:var(--gold) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  }
+  @media (max-width:640px){
+    table{font-size:11.5px;}
+    th,td{padding:5px 4px;}
+    .agenda-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+
+  <div class="topbar no-print">
+    <div class="brand">
+      <div class="crest">S</div>
+      <div class="brand-text">
+        <div class="app-title">School schedule builder</div>
+        <div class="app-sub">Fill in each grade once — teacher schedules build themselves</div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="editToggle"><span id="editToggleLabel">Edit schedule</span></button>
+      <button id="printBtn">Print / Save as PDF</button>
+      <button id="backupBtn">Download backup</button>
+      <button id="restoreBtn">Restore backup</button>
+      <button id="excelBtn">Download Excel</button>
+      <input type="file" id="restoreInput" accept="application/json" style="display:none;">
+      <button id="resetBtn" class="danger">Reset sample</button>
+    </div>
+  </div>
+
+  <div class="edit-toolbar no-print" id="editToolbar">
+    <button class="small" id="addClassBtn">+ Add grade / class</button>
+    <div class="divider"></div>
+    <button class="small" id="addPeriodBtn">+ Add period row</button>
+    <button class="small" id="addSpecialBtn">+ Add break / prayer row</button>
+    <div class="divider"></div>
+    <span style="font-size:12.5px;color:var(--ink-soft);">Click a subject cell to assign it. Double-click a grade or teacher name to rename it.</span>
+  </div>
+
+  <div class="info-card">
+    <div class="info-field logo-field">
+      <label>School logo</label>
+      <div class="logo-row">
+        <div class="logo-box" id="logoBox"></div>
+        <span class="no-print logo-controls" id="logoControls"></span>
+        <input type="file" id="logoInput" accept="image/*" style="display:none;">
+      </div>
+    </div>
+    <div class="info-field">
+      <label>School</label>
+      <span class="editable" id="fSchool" contenteditable="false">Sunrise Academy</span>
+    </div>
+  </div>
+
+  <div class="storage-note no-print" id="storageNote"></div>
+
+  <div class="view-tabs no-print">
+    <div class="view-tab active" data-panel="classPanel">Student / class schedules</div>
+    <div class="view-tab" data-panel="teacherPanel">Teacher schedules</div>
+    <div class="view-tab" data-panel="dutyPanel">Free time overview</div>
+  </div>
+
+  <div class="panel active" id="classPanel">
+    <div class="pill-tabs no-print" id="classTabs"></div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 id="classSheetTitle">Weekly schedule</h2>
+      </div>
+      <div class="sheet-sub">
+        <div class="info-field">
+          <label>Morning assembly</label>
+          <span class="editable small" id="fAssembly" contenteditable="false"></span>
+        </div>
+        <div class="info-field">
+          <label>Home time</label>
+          <span class="editable small" id="fHome" contenteditable="false"></span>
+        </div>
+      </div>
+      <div id="classTableWrap"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="teacherPanel">
+    <div class="teacher-manager no-print" id="teacherManager"></div>
+    <div class="pill-tabs no-print" id="teacherTabs"></div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 id="teacherSheetTitle">Teacher schedule</h2>
+        <span class="assembly-note" id="teacherEditHint">Click a period to assign it — the class schedule updates automatically</span>
+      </div>
+      <div class="pill-tabs no-print" id="teacherClassPicker" style="margin-bottom:12px;"></div>
+      <div id="teacherTableWrap"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="dutyPanel">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Free time overview — all teachers</h2>
+        <span class="assembly-note">Green cells mean free — easy to spot who to assign for duty</span>
+      </div>
+      <div id="dutyTableWrap" style="overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <div class="footnote no-print" id="lastSaved"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<div class="modal-backdrop no-print" id="cellModal">
+  <div class="modal">
+    <h3 id="modalTitle">Edit period</h3>
+    <label>Subject</label>
+    <input type="text" id="modalSubject" placeholder="e.g. Math">
+    <label id="modalTeacherLabel">Teacher</label>
+    <select id="modalTeacher"></select>
+    <p id="modalConflict" style="display:none;font-size:12px;color:var(--gold);margin:8px 0 0;"></p>
+    <div class="modal-actions">
+      <button class="danger small" id="modalClear">Mark free (X)</button>
+      <div style="display:flex; gap:8px;">
+        <button class="small" id="modalCancel">Cancel</button>
+        <button class="primary small" id="modalSave">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+
+function uid(){ return 'r' + Math.random().toString(36).slice(2,9); }
+
+function skeletonRows(){
+  const p = (num,time)=>({id:uid(), type:'period', num, time});
+  const s = (name,time,prayer)=>({id:uid(), type:'special', name, time, prayer:!!prayer});
+  return [
+    p(1,'8:45 – 9:45'),
+    p(2,'9:45 – 10:30'),
+    s('1st Break','10:30 – 10:40'),
+    p(3,'10:40 – 11:25'),
+    p(4,'11:25 – 12:10'),
+    p(5,'12:10 – 12:55'),
+    s('Lunch & Wudhu','12:55 – 1:10'),
+    s('Zuhur Salah','1:10 – 1:35', true),
+    p(6,'1:35 – 2:20'),
+    s('2nd Break','2:20 – 2:30'),
+    p(7,'2:30 – 3:15'),
+  ];
+}
+
+function makeClass(name, filled){
+  const rows = skeletonRows();
+  const cells = {};
+  if(filled){
+    const byNum = {};
+    rows.filter(r=>r.type==='period').forEach(r=>byNum[r.num]=r.id);
+    const set=(num,day,subject,teacher)=>{ cells[byNum[num]+'_'+day] = {subject,teacher}; };
+    set(1,'Monday','Math','Sr. Saba'); set(1,'Tuesday','Math','Sr. Saba'); set(1,'Wednesday','Math','Sr. Saba'); set(1,'Thursday','Science','Sr. Saba'); set(1,'Friday','Math','Sr. Saba');
+    DAYS.forEach(d=>set(2,d,'Quran','Sr. Jinan'));
+    set(3,'Monday','Social Studies','Sr. Saba'); set(3,'Tuesday','Science','Sr. Saba'); set(3,'Wednesday','PM Writing','Sr. Saba'); set(3,'Thursday','Math','Sr. Saba'); set(3,'Friday','Physical Education','Sr. Saba');
+    set(4,'Monday','Physical Education','Sr. Saba'); set(4,'Tuesday','Physical Education','Sr. Saba'); set(4,'Wednesday','PM Writing','Sr. Saba'); set(4,'Thursday','Math','Sr. Saba'); set(4,'Friday','Language Power','Sr. Saba');
+    set(5,'Monday','Arabic','Sr. Jinan'); set(5,'Tuesday','Arabic','Sr. Jinan'); set(5,'Wednesday','Arabic','Sr. Jinan'); set(5,'Thursday','Arabic','Sr. Jinan'); set(5,'Friday','Hadith','Sr. Jinan');
+    set(6,'Monday','Literacy','Sr. Saba'); set(6,'Tuesday','Ibadaat','Sr. Saba'); set(6,'Wednesday','Social Studies','Sr. Saba'); set(6,'Thursday','Physical Education','Sr. Saba'); set(6,'Friday','Ibadaat','Sr. Saba');
+    set(7,'Monday','Literacy','Sr. Saba'); set(7,'Tuesday','Spelling Workout','Sr. Saba'); set(7,'Wednesday','Spelling Workout','Sr. Saba'); set(7,'Thursday','Art','Sr. Saba'); set(7,'Friday','Language Power','Sr. Saba');
+  }
+  return {id:uid(), name, assembly:'8:35 AM', homeTime:'3:20 – 3:30', rows, cells};
+}
+
+function defaultState(){
+  const gradeNames = ['Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','High School'];
+  const classes = gradeNames.map((n,i)=> makeClass(n, i===0));
+  return {
+    school:'Sunrise Academy',
+    logo:null,
+    teachers:['Sr. Saba','Sr. Jinan'],
+    classes,
+    activeClassId: classes[0].id,
+    editMode:false,
+    activeTeacher:'Sr. Saba',
+    activeTeacherClassId: null
+  };
+}
+
+let state = null;
+
+async function loadState(){
+  try{
+    const res = await window.storage.get('schedule', true);
+    if(res && res.value){
+      state = JSON.parse(res.value);
+      return;
+    }
+  }catch(e){}
+  state = defaultState();
+}
+
+let saveTimer = null;
+function scheduleSave(){
+  const el = document.getElementById('lastSaved');
+  if(el) el.textContent = 'Saving…';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    try{
+      await window.storage.set('schedule', JSON.stringify(state), true);
+      if(el) el.textContent = 'Saved ' + new Date().toLocaleTimeString();
+    }catch(e){
+      if(el) el.textContent = 'Could not save (changes stay for this session)';
+    }
+  }, 500);
+}
+
+function activeClass(){ return state.classes.find(c=>c.id===state.activeClassId) || state.classes[0]; }
+function cellKey(rowId, day){ return rowId + '_' + day; }
+
+function render(){
+  document.getElementById('app').classList.toggle('edit-mode', state.editMode);
+  document.getElementById('editToggleLabel').textContent = state.editMode ? 'Done editing' : 'Edit schedule';
+  setEditableText('fSchool', state.school);
+  document.querySelectorAll('#fSchool').forEach(el=> el.setAttribute('contenteditable', state.editMode?'true':'false'));
+  document.getElementById('storageNote').textContent =
+    'Saved automatically in this page\'s shared storage — anyone who opens this exact link can view and edit it. Use "Download backup" for your own offline copy.';
+
+  renderLogo();
+
+  if(!state.classes.find(c=>c.id===state.activeClassId)) state.activeClassId = state.classes[0] ? state.classes[0].id : null;
+
+  renderClassTabs();
+  renderClassPanel();
+  renderTeacherManager();
+  renderTeacherTabs();
+  renderTeacherPanel();
+  renderDutyPanel();
+}
+
+function renderLogo(){
+  const box = document.getElementById('logoBox');
+  const controls = document.getElementById('logoControls');
+  box.innerHTML = state.logo
+    ? '<img src="'+state.logo+'" alt="School logo">'
+    : esc((state.school||'S').trim().charAt(0).toUpperCase() || 'S');
+
+  if(!state.editMode){ controls.innerHTML = ''; return; }
+  controls.innerHTML = '<button class="small" id="logoUploadBtn">'+(state.logo ? 'Change' : 'Upload')+'</button>'+
+    (state.logo ? '<button class="small danger" id="logoRemoveBtn">Remove</button>' : '');
+  document.getElementById('logoUploadBtn').addEventListener('click', ()=> document.getElementById('logoInput').click());
+  const removeBtn = document.getElementById('logoRemoveBtn');
+  if(removeBtn) removeBtn.addEventListener('click', ()=>{
+    state.logo = null;
+    scheduleSave();
+    renderLogo();
+  });
+}
+
+function handleLogoFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const maxSize = 160;
+      let w = img.width, h = img.height;
+      if(w>h){ if(w>maxSize){ h = Math.round(h*maxSize/w); w = maxSize; } }
+      else { if(h>maxSize){ w = Math.round(w*maxSize/h); h = maxSize; } }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      state.logo = canvas.toDataURL('image/png');
+      scheduleSave();
+      renderLogo();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setEditableText(id, val){
+  const el = document.getElementById(id);
+  if(el && document.activeElement !== el) el.textContent = val;
+}
+
+function renderClassTabs(){
+  const el = document.getElementById('classTabs');
+  el.innerHTML = state.classes.map(c=>
+    '<span class="p-tab'+(c.id===state.activeClassId?' active':'')+'" data-class="'+c.id+'">'+
+      '<span class="p-tab-name" data-class="'+c.id+'"'+(state.editMode?' contenteditable="true"':'')+'>'+esc(c.name)+'</span>'+
+      (state.editMode ? '<button class="p-del" data-class="'+c.id+'" title="Delete grade">&times;</button>' : '')+
+    '</span>'
+  ).join('');
+
+  el.querySelectorAll('.p-tab').forEach(tab=>{
+    tab.addEventListener('click', (e)=>{
+      if(e.target.classList.contains('p-del') || e.target.classList.contains('p-tab-name')) return;
+      state.activeClassId = tab.dataset.class;
+      renderClassTabs(); renderClassPanel();
+    });
+  });
+  el.querySelectorAll('.p-tab-name').forEach(nameEl=>{
+    nameEl.addEventListener('click', (e)=>{ e.stopPropagation(); state.activeClassId = nameEl.dataset.class; renderClassTabs(); renderClassPanel(); });
+    nameEl.addEventListener('blur', (e)=>{
+      const cls = state.classes.find(c=>c.id===nameEl.dataset.class);
+      const val = e.target.textContent.trim();
+      if(cls && val){ cls.name = val; scheduleSave(); renderClassTabs(); renderClassPanel(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel(); }
+    });
+  });
+  el.querySelectorAll('.p-del').forEach(b=>{
+    b.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(state.classes.length<=1){ alert('At least one grade must remain.'); return; }
+      if(!confirm('Delete this grade and its schedule?')) return;
+      state.classes = state.classes.filter(c=>c.id!==b.dataset.class);
+      if(state.activeClassId===b.dataset.class) state.activeClassId = state.classes[0].id;
+      scheduleSave();
+      renderClassTabs(); renderClassPanel(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel();
+    });
+  });
+}
+
+function renderClassPanel(){
+  const cls = activeClass();
+  if(!cls) return;
+  document.getElementById('classSheetTitle').textContent = cls.name + ' — weekly schedule';
+  setEditableText('fAssembly', cls.assembly);
+  setEditableText('fHome', cls.homeTime);
+  document.getElementById('fAssembly').setAttribute('contenteditable', state.editMode?'true':'false');
+  document.getElementById('fHome').setAttribute('contenteditable', state.editMode?'true':'false');
+  renderClassTable();
+}
+
+function renderClassTable(){
+  const cls = activeClass();
+  const wrap = document.getElementById('classTableWrap');
+  let html = '<table><thead><tr><th style="min-width:70px;">Period</th><th>Time</th>';
+  DAYS.forEach(d=> html += '<th>'+d+'</th>');
+  html += '</tr></thead><tbody>';
+
+  cls.rows.forEach(row=>{
+    if(row.type==='special'){
+      html += '<tr class="special-row'+(row.prayer?' prayer':'')+'" data-row="'+row.id+'">';
+      html += '<td colspan="2" class="special-cell rowlabel" data-field="name" data-row="'+row.id+'">'+esc(row.name)+'</td>';
+      html += '<td colspan="'+DAYS.length+'" class="special-cell rowtime" data-field="time" data-row="'+row.id+'">'+esc(row.time)+'</td>';
+      html += rowControls(row.id);
+      html += '</tr>';
+    } else {
+      html += '<tr data-row="'+row.id+'">';
+      html += '<th class="rowlabel" data-field="num" data-row="'+row.id+'">Period '+row.num+'</th>';
+      html += '<td class="rowtime" data-field="time" data-row="'+row.id+'"><span class="time-cell">'+esc(row.time)+'</span></td>';
+      DAYS.forEach(day=>{
+        const c = cls.cells[cellKey(row.id, day)];
+        if(c && c.subject){
+          html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'"><span class="subj">'+esc(c.subject)+'</span><span class="teach">'+esc(c.teacher||'')+'</span></td>';
+        } else {
+          html += '<td class="subject-cell empty-x" data-row="'+row.id+'" data-day="'+day+'">—</td>';
+        }
+      });
+      html += rowControls(row.id);
+      html += '</tr>';
+    }
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  if(state.editMode){
+    wrap.querySelectorAll('td.subject-cell').forEach(td=>{
+      td.addEventListener('click', ()=> openCellModal(activeClass().id, td.dataset.row, td.dataset.day, null));
+    });
+    wrap.querySelectorAll('.rowlabel, .rowtime').forEach(el=>{
+      if(el.dataset.field==='num') return;
+      el.setAttribute('contenteditable','true');
+      el.addEventListener('blur', onRowFieldEdit);
+    });
+    wrap.querySelectorAll('.row-up').forEach(b=>b.addEventListener('click', ()=>moveRow(b.dataset.row,-1)));
+    wrap.querySelectorAll('.row-down').forEach(b=>b.addEventListener('click', ()=>moveRow(b.dataset.row,1)));
+    wrap.querySelectorAll('.row-del').forEach(b=>b.addEventListener('click', ()=>deleteRow(b.dataset.row)));
+  }
+}
+
+function rowControls(rowId){
+  if(!state.editMode) return '';
+  return '<td class="no-print" style="border:none;background:transparent;padding:2px;">'+
+    '<div class="row-controls">'+
+      '<button class="ghost row-up" data-row="'+rowId+'" title="Move up">&uarr;</button>'+
+      '<button class="ghost row-down" data-row="'+rowId+'" title="Move down">&darr;</button>'+
+      '<button class="ghost row-del" data-row="'+rowId+'" title="Delete row">&times;</button>'+
+    '</div></td>';
+}
+
+function onRowFieldEdit(e){
+  const cls = activeClass();
+  const rowId = e.target.dataset.row;
+  const field = e.target.dataset.field;
+  const row = cls.rows.find(r=>r.id===rowId);
+  if(!row) return;
+  row[field] = e.target.textContent.trim();
+  scheduleSave();
+  renderClassTable(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function moveRow(rowId, dir){
+  const cls = activeClass();
+  const i = cls.rows.findIndex(r=>r.id===rowId);
+  const j = i+dir;
+  if(j<0 || j>=cls.rows.length) return;
+  const tmp = cls.rows[i]; cls.rows[i]=cls.rows[j]; cls.rows[j]=tmp;
+  scheduleSave();
+  renderClassTable(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function deleteRow(rowId){
+  const cls = activeClass();
+  if(!confirm('Delete this row from the schedule?')) return;
+  cls.rows = cls.rows.filter(r=>r.id!==rowId);
+  Object.keys(cls.cells).forEach(k=>{ if(k.startsWith(rowId+'_')) delete cls.cells[k]; });
+  scheduleSave();
+  renderClassTable(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function addPeriodRow(){
+  const cls = activeClass();
+  const nums = cls.rows.filter(r=>r.type==='period').map(r=>r.num);
+  const nextNum = nums.length ? Math.max(...nums)+1 : 1;
+  cls.rows.push({id:uid(), type:'period', num:nextNum, time:'—'});
+  scheduleSave();
+  renderClassTable(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function addSpecialRow(){
+  const cls = activeClass();
+  cls.rows.push({id:uid(), type:'special', name:'Break', time:'—', prayer:false});
+  scheduleSave();
+  renderClassTable(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function addClass(){
+  const name = prompt('Name for the new grade / class (e.g. "Grade 9")');
+  if(!name) return;
+  const cls = makeClass(name.trim(), false);
+  state.classes.push(cls);
+  state.activeClassId = cls.id;
+  scheduleSave();
+  renderClassTabs(); renderClassPanel(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel();
+}
+
+let modalTarget = null;
+function findClass(classId){ return state.classes.find(c=>c.id===classId); }
+
+function openCellModal(classId, rowId, day, lockTeacher){
+  modalTarget = {classId, rowId, day, lockTeacher};
+  const cls = findClass(classId);
+  const c = cls.cells[cellKey(rowId,day)] || {subject:'', teacher: lockTeacher || state.teachers[0] || ''};
+  document.getElementById('modalSubject').value = c.subject || '';
+
+  const sel = document.getElementById('modalTeacher');
+  sel.innerHTML = state.teachers.map(t=>'<option value="'+escAttr(t)+'">'+esc(t)+'</option>').join('');
+  const conflictEl = document.getElementById('modalConflict');
+  const label = document.getElementById('modalTeacherLabel');
+
+  if(lockTeacher){
+    sel.value = lockTeacher;
+    sel.disabled = true;
+    label.textContent = 'Teacher';
+    if(c.teacher && c.teacher!==lockTeacher){
+      conflictEl.style.display = 'block';
+      conflictEl.textContent = 'Currently assigned to ' + c.teacher + '. Saving will reassign this period to ' + lockTeacher + '.';
+    } else {
+      conflictEl.style.display = 'none';
+    }
+  } else {
+    sel.disabled = false;
+    label.textContent = 'Teacher';
+    sel.value = c.teacher || (state.teachers[0]||'');
+    conflictEl.style.display = 'none';
+  }
+
+  document.getElementById('cellModal').classList.add('open');
+  document.getElementById('modalSubject').focus();
+}
+function closeCellModal(){
+  document.getElementById('cellModal').classList.remove('open');
+  modalTarget = null;
+}
+function saveCellModal(){
+  if(!modalTarget) return;
+  const cls = findClass(modalTarget.classId);
+  const subject = document.getElementById('modalSubject').value.trim();
+  const teacher = modalTarget.lockTeacher || document.getElementById('modalTeacher').value;
+  if(!subject){
+    delete cls.cells[cellKey(modalTarget.rowId, modalTarget.day)];
+  } else {
+    cls.cells[cellKey(modalTarget.rowId, modalTarget.day)] = {subject, teacher};
+  }
+  scheduleSave();
+  closeCellModal();
+  renderClassTable(); renderTeacherManager(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel();
+}
+function clearCellModal(){
+  if(!modalTarget) return;
+  const cls = findClass(modalTarget.classId);
+  delete cls.cells[cellKey(modalTarget.rowId, modalTarget.day)];
+  scheduleSave();
+  closeCellModal();
+  renderClassTable(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function allTeachersInUse(){
+  const set = new Set(state.teachers);
+  state.classes.forEach(cls=>{
+    Object.values(cls.cells).forEach(c=>{ if(c.teacher) set.add(c.teacher); });
+  });
+  return Array.from(set);
+}
+
+function getMaxPeriod(){
+  let max = 0;
+  state.classes.forEach(cls=> cls.rows.forEach(r=>{ if(r.type==='period' && r.num>max) max = r.num; }));
+  return max || 7;
+}
+
+function abbrevClass(name){
+  const m = String(name).match(/grade\s*(\d+)/i);
+  if(m) return 'G'+m[1];
+  return String(name).split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,4) || name;
+}
+
+function findAssignment(teacher, day, periodNum){
+  for(const cls of state.classes){
+    const row = cls.rows.find(r=>r.type==='period' && r.num===periodNum);
+    if(!row) continue;
+    const c = cls.cells[cellKey(row.id, day)];
+    if(c && c.teacher===teacher) return {subject:c.subject, className:cls.name};
+  }
+  return null;
+}
+
+function renderDutyPanel(){
+  const wrap = document.getElementById('dutyTableWrap');
+  const teachers = allTeachersInUse();
+  const maxPeriod = getMaxPeriod();
+  if(teachers.length===0){ wrap.innerHTML = '<p style="color:var(--ink-soft);font-size:13.5px;">No teachers yet.</p>'; return; }
+
+  let html = '<table class="overview"><thead><tr class="ov-days"><th class="ov-teacher">Teacher</th>';
+  DAYS.forEach(day=> html += '<th colspan="'+maxPeriod+'">'+day+'</th>');
+  html += '</tr><tr><th class="ov-teacher"></th>';
+  DAYS.forEach(()=>{ for(let p=1;p<=maxPeriod;p++) html += '<th>P'+p+'</th>'; });
+  html += '</tr></thead><tbody>';
+
+  teachers.forEach(teacher=>{
+    html += '<tr><th class="ov-teacher">'+esc(teacher)+'</th>';
+    DAYS.forEach(day=>{
+      for(let p=1;p<=maxPeriod;p++){
+        const a = findAssignment(teacher, day, p);
+        if(a){
+          html += '<td class="ov-busy"><span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(abbrevClass(a.className))+'</span></td>';
+        } else {
+          html += '<td class="ov-free">Free</td>';
+        }
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function sanitizeSheetName(name){
+  return String(name).replace(/[:\\\/\?\*\[\]]/g,'').slice(0,31) || 'Sheet';
+}
+
+function buildWorkbook(){
+  const wb = XLSX.utils.book_new();
+
+  state.classes.forEach(cls=>{
+    const aoa = [['Period','Time', ...DAYS]];
+    cls.rows.forEach(row=>{
+      if(row.type==='special'){
+        aoa.push([row.name, row.time, '', '', '', '', '']);
+      } else {
+        const line = ['Period '+row.num, row.time];
+        DAYS.forEach(day=>{
+          const c = cls.cells[cellKey(row.id, day)];
+          line.push(c && c.subject ? c.subject + (c.teacher ? ' ('+c.teacher+')' : '') : '');
+        });
+        aoa.push(line);
+      }
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(cls.name));
+  });
+
+  const maxPeriod = getMaxPeriod();
+  const header1 = ['Teacher'];
+  const header2 = [''];
+  DAYS.forEach(day=>{
+    for(let p=1;p<=maxPeriod;p++){ header1.push(p===1 ? day : ''); header2.push('P'+p); }
+  });
+  const aoa2 = [header1, header2];
+  allTeachersInUse().forEach(teacher=>{
+    const row = [teacher];
+    DAYS.forEach(day=>{
+      for(let p=1;p<=maxPeriod;p++){
+        const a = findAssignment(teacher, day, p);
+        row.push(a ? a.subject + ' ('+abbrevClass(a.className)+')' : 'Free');
+      }
+    });
+    aoa2.push(row);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Teacher Overview');
+
+  return wb;
+}
+
+function renderTeacherManager(){
+  const el = document.getElementById('teacherManager');
+  if(!state.editMode){ el.innerHTML=''; return; }
+  let html = '<span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-right:4px;">Teachers:</span>';
+  state.teachers.forEach(t=>{
+    html += '<span class="chip"><span class="chip-name" contenteditable="true" data-teacher="'+escAttr(t)+'">'+esc(t)+'</span>'+
+      '<button class="chip-del" data-teacher="'+escAttr(t)+'" title="Remove">&times;</button></span>';
+  });
+  html += '<span class="add-teacher-form"><input type="text" id="newTeacherInput" placeholder="Add teacher name"><button class="small" id="addTeacherBtn">Add</button></span>';
+  el.innerHTML = html;
+
+  el.querySelectorAll('.chip-name').forEach(span=>{
+    span.addEventListener('blur', (e)=>{
+      const oldName = e.target.dataset.teacher;
+      const newName = e.target.textContent.trim();
+      if(!newName || newName===oldName) { e.target.textContent = oldName; return; }
+      renameTeacher(oldName, newName);
+    });
+  });
+  el.querySelectorAll('.chip-del').forEach(b=>{
+    b.addEventListener('click', ()=> removeTeacher(b.dataset.teacher));
+  });
+  document.getElementById('addTeacherBtn').addEventListener('click', addTeacherFromInput);
+  document.getElementById('newTeacherInput').addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); addTeacherFromInput(); }
+  });
+}
+
+function addTeacherFromInput(){
+  const input = document.getElementById('newTeacherInput');
+  const name = input.value.trim();
+  if(!name) return;
+  if(!state.teachers.includes(name)) state.teachers.push(name);
+  input.value='';
+  scheduleSave();
+  renderTeacherManager(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function renameTeacher(oldName, newName){
+  state.teachers = state.teachers.map(t=> t===oldName ? newName : t);
+  state.classes.forEach(cls=>{
+    Object.values(cls.cells).forEach(c=>{ if(c.teacher===oldName) c.teacher=newName; });
+  });
+  if(state.activeTeacher===oldName) state.activeTeacher=newName;
+  scheduleSave();
+  renderClassTable(); renderTeacherManager(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function removeTeacher(name){
+  if(!confirm('Remove '+name+'? Their assigned periods will be cleared to free, in every grade.')) return;
+  state.teachers = state.teachers.filter(t=>t!==name);
+  state.classes.forEach(cls=>{
+    Object.keys(cls.cells).forEach(k=>{ if(cls.cells[k].teacher===name) delete cls.cells[k]; });
+  });
+  if(state.activeTeacher===name) state.activeTeacher = state.teachers[0] || '';
+  scheduleSave();
+  renderClassTable(); renderTeacherManager(); renderTeacherTabs(); renderTeacherPanel(); renderDutyPanel();
+}
+
+function renderTeacherTabs(){
+  const el = document.getElementById('teacherTabs');
+  const list = allTeachersInUse();
+  if(!list.includes(state.activeTeacher)) state.activeTeacher = list[0] || '';
+  el.innerHTML = list.map(t=>
+    '<span class="p-tab'+(t===state.activeTeacher?' active':'')+'" data-teacher="'+escAttr(t)+'">'+esc(t)+'</span>'
+  ).join('');
+  el.querySelectorAll('.p-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      state.activeTeacher = tab.dataset.teacher;
+      state.activeTeacherClassId = null;
+      renderTeacherTabs(); renderTeacherPanel();
+    });
+  });
+}
+
+function renderTeacherPanel(){
+  const wrap = document.getElementById('teacherTableWrap');
+  const pickerEl = document.getElementById('teacherClassPicker');
+  const teacher = state.activeTeacher;
+  document.getElementById('teacherSheetTitle').textContent = teacher ? teacher + ' — weekly schedule' : 'Teacher schedule';
+  document.getElementById('teacherEditHint').textContent = state.editMode
+    ? 'Click a period below to assign it — the class schedule updates automatically'
+    : 'Switch to edit mode to assign periods from here';
+
+  if(!teacher){
+    pickerEl.innerHTML = '';
+    wrap.innerHTML = '<p style="color:var(--ink-soft);font-size:13.5px;">No teachers yet. Switch to edit mode to add one.</p>';
+    return;
+  }
+
+  const classesTaught = new Set(state.classes.filter(cls=>
+    Object.values(cls.cells).some(c=> c.teacher===teacher)
+  ).map(c=>c.id));
+
+  if(!state.activeTeacherClassId || !state.classes.find(c=>c.id===state.activeTeacherClassId)){
+    const first = state.classes.find(c=> classesTaught.has(c.id)) || state.classes[0];
+    state.activeTeacherClassId = first ? first.id : null;
+  }
+
+  pickerEl.innerHTML = state.classes.map(c=>
+    '<span class="p-tab'+(c.id===state.activeTeacherClassId?' active':'')+'" data-class="'+c.id+'">'+
+      esc(c.name) + (classesTaught.has(c.id) ? '' : '<span style="opacity:.55;font-weight:400;"> · none yet</span>') +
+    '</span>'
+  ).join('');
+  pickerEl.querySelectorAll('.p-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      state.activeTeacherClassId = tab.dataset.class;
+      renderTeacherPanel();
+    });
+  });
+
+  const cls = state.classes.find(c=>c.id===state.activeTeacherClassId);
+  if(!cls){ wrap.innerHTML = ''; return; }
+
+  const periodRows = cls.rows.filter(r=>r.type==='period');
+  let html = '<table><thead><tr><th style="min-width:70px;">Period</th><th>Time</th>';
+  DAYS.forEach(d=> html += '<th>'+d+'</th>');
+  html += '</tr></thead><tbody>';
+  periodRows.forEach(row=>{
+    html += '<tr><th>Period '+row.num+'</th><td><span class="time-cell">'+esc(row.time)+'</span></td>';
+    DAYS.forEach(day=>{
+      const c = cls.cells[cellKey(row.id, day)];
+      if(c && c.teacher===teacher){
+        html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'"><span class="subj">'+esc(c.subject)+'</span></td>';
+      } else if(c && c.subject){
+        html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'" style="color:var(--ink-soft);"><span class="subj" style="color:var(--ink-soft);">'+esc(c.subject)+'</span><span class="teach">'+esc(c.teacher)+'</span></td>';
+      } else {
+        html += '<td class="subject-cell empty-x" data-row="'+row.id+'" data-day="'+day+'">X</td>';
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  if(state.editMode){
+    wrap.querySelectorAll('td.subject-cell').forEach(td=>{
+      td.addEventListener('click', ()=> openCellModal(cls.id, td.dataset.row, td.dataset.day, teacher));
+    });
+  }
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+
+function bindStatic(){
+  document.getElementById('editToggle').addEventListener('click', ()=>{
+    state.editMode = !state.editMode;
+    scheduleSave();
+    render();
+  });
+  document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    if(!confirm('Reset to the sample schedule? This replaces all current data, all grades.')) return;
+    state = defaultState();
+    scheduleSave();
+    render();
+  });
+  document.getElementById('addPeriodBtn').addEventListener('click', addPeriodRow);
+  document.getElementById('addSpecialBtn').addEventListener('click', addSpecialRow);
+  document.getElementById('addClassBtn').addEventListener('click', addClass);
+
+  document.querySelectorAll('.view-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.panel).classList.add('active');
+    });
+  });
+
+  document.getElementById('fSchool').addEventListener('blur', (e)=>{
+    state.school = e.target.textContent.trim();
+    scheduleSave();
+    renderLogo();
+  });
+  document.getElementById('fAssembly').addEventListener('blur', (e)=>{
+    activeClass().assembly = e.target.textContent.trim();
+    scheduleSave();
+  });
+  document.getElementById('fHome').addEventListener('blur', (e)=>{
+    activeClass().homeTime = e.target.textContent.trim();
+    scheduleSave();
+  });
+
+  document.getElementById('logoInput').addEventListener('change', (e)=>{
+    handleLogoFile(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  document.getElementById('backupBtn').addEventListener('click', ()=>{
+    const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (state.school || 'school-schedule').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '-backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById('excelBtn').addEventListener('click', ()=>{
+    if(typeof XLSX==='undefined'){ alert('Excel export is still loading — try again in a moment.'); return; }
+    const wb = buildWorkbook();
+    const filename = (state.school || 'school-schedule').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '-schedules.xlsx';
+    XLSX.writeFile(wb, filename);
+  });
+  document.getElementById('restoreBtn').addEventListener('click', ()=> document.getElementById('restoreInput').click());
+  document.getElementById('restoreInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      try{
+        const parsed = JSON.parse(ev.target.result);
+        if(!parsed.classes) throw new Error('not a valid backup');
+        if(!confirm('Restore this backup? It will replace everything currently on screen.')) return;
+        state = parsed;
+        scheduleSave();
+        render();
+      }catch(err){
+        alert('That file does not look like a valid schedule backup.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  document.getElementById('modalCancel').addEventListener('click', closeCellModal);
+  document.getElementById('modalSave').addEventListener('click', saveCellModal);
+  document.getElementById('modalClear').addEventListener('click', clearCellModal);
+  document.getElementById('cellModal').addEventListener('click', (e)=>{
+    if(e.target.id==='cellModal') closeCellModal();
+  });
+}
+
+(async function init(){
+  await loadState();
+  bindStatic();
+  render();
+})();
+</script>
+</body>
+</html>
