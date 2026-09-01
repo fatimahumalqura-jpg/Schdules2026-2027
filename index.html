@@ -288,7 +288,7 @@
       <button class="small" id="addSpecialBtn">+ Add break / prayer row</button>
     </span>
     <span class="tb-group" id="tbTeacherGroup">
-      <span style="font-size:12.5px;color:var(--ink-soft);">Pick a grade above, then click a period to assign this teacher — or pick "ESL / Hifz (no grade)" for pull-out periods that shouldn't show on any class schedule.</span>
+      <span style="font-size:12.5px;color:var(--ink-soft);">Pick a grade above, then click a period to assign this teacher — or pick "ESL (no grade)" / "Hifz (no grade)" for pull-out periods that shouldn't show on any class schedule.</span>
     </span>
     <span class="tb-group" id="tbRosterGroup">
       <button class="small" id="addDutyRowBtn">+ Add duty row</button>
@@ -490,7 +490,7 @@ function defaultState(){
   const gradeNames = ['Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','High School'];
   const classes = gradeNames.map((n,i)=> makeClass(n, i===0));
   return {
-    school:'Sunrise Academy',
+    school:'Um Al Qura Islamic School',
     logo:null,
     teachers:['Sr. Saba','Sr. Jinan'],
     classes,
@@ -509,6 +509,10 @@ let storageAvailable = true;
 
 function normalizeState(){
   if(!state.extras) state.extras = [];
+  // migrate any older "no grade" entries (from before ESL/Hifz were split) to a group
+  state.extras.forEach(e=>{
+    if(!e.group) e.group = /hifz/i.test(e.subject||'') ? 'HIFZ' : 'ESL';
+  });
   if(!state.duties) state.duties = defaultDuties();
   if(!state.activeView) state.activeView = 'classPanel';
 }
@@ -925,23 +929,35 @@ function openCellModal(classId, rowId, day, lockTeacher){
   document.getElementById('modalSubject').focus();
 }
 
-function openExtraModal(teacher, day, periodNum){
-  modalTarget = {kind:'extra', teacher, day, periodNum};
-  const existing = findExtra(teacher, day, periodNum);
-  document.getElementById('modalSubject').value = existing ? existing.subject : '';
-  document.getElementById('modalTitle').textContent = 'ESL / Hifz — no grade assigned yet';
+function openExtraModal(teacher, day, periodNum, group){
+  modalTarget = {kind:'extra', teacher, day, periodNum, group};
+  const label = group==='HIFZ' ? 'Hifz' : 'ESL';
+  // look for any existing entry at this slot regardless of group, since a teacher
+  // can only be in one place at a time
+  const existingAny = findExtra(teacher, day, periodNum);
+  const existingSameGroup = existingAny && existingAny.group===group ? existingAny : null;
+  document.getElementById('modalSubject').value = existingSameGroup ? existingSameGroup.subject : label;
+  document.getElementById('modalTitle').textContent = label + ' — no grade assigned yet';
 
   const sel = document.getElementById('modalTeacher');
   sel.innerHTML = '<option value="'+escAttr(teacher)+'">'+esc(teacher)+'</option>';
   sel.value = teacher;
   sel.disabled = true;
   document.getElementById('modalTeacherLabel').textContent = 'Teacher';
-  document.getElementById('modalConflict').style.display = 'none';
+
+  const conflictEl = document.getElementById('modalConflict');
+  if(existingAny && existingAny.group!==group){
+    conflictEl.style.display = 'block';
+    conflictEl.textContent = 'Currently marked as ' + (existingAny.group==='HIFZ'?'Hifz':'ESL') + ' ("' + existingAny.subject + '"). Saving will replace it with this ' + label + ' entry.';
+  } else {
+    conflictEl.style.display = 'none';
+  }
   document.getElementById('modalAlsoApplyWrap').style.display = 'none';
   document.getElementById('modalAlsoApply').innerHTML = '';
 
   document.getElementById('cellModal').classList.add('open');
   document.getElementById('modalSubject').focus();
+  document.getElementById('modalSubject').select();
 }
 
 function closeCellModal(){
@@ -954,7 +970,7 @@ function saveCellModal(){
 
   if(modalTarget.kind==='extra'){
     removeExtra(modalTarget.teacher, modalTarget.day, modalTarget.periodNum);
-    if(subject) state.extras.push({id:uid(), teacher:modalTarget.teacher, day:modalTarget.day, periodNum:modalTarget.periodNum, subject});
+    if(subject) state.extras.push({id:uid(), teacher:modalTarget.teacher, day:modalTarget.day, periodNum:modalTarget.periodNum, subject, group:modalTarget.group});
     scheduleSave();
     closeCellModal();
     renderTeacherPanel(); renderDutyPanel();
@@ -1001,8 +1017,8 @@ function clearCellModal(){
   renderClassTable(); renderTeacherPanel(); renderDutyPanel();
 }
 
-function findExtra(teacher, day, periodNum){
-  return (state.extras||[]).find(e=> e.teacher===teacher && e.day===day && e.periodNum===periodNum);
+function findExtra(teacher, day, periodNum, group){
+  return (state.extras||[]).find(e=> e.teacher===teacher && e.day===day && e.periodNum===periodNum && (!group || e.group===group));
 }
 function removeExtra(teacher, day, periodNum){
   state.extras = (state.extras||[]).filter(e=> !(e.teacher===teacher && e.day===day && e.periodNum===periodNum));
@@ -1038,7 +1054,7 @@ function findAssignmentsRaw(teacher, day, periodNum){
     if(c && c.teacher===teacher) matches.push({subject:c.subject, className:cls.name});
   }
   const ex = findExtra(teacher, day, periodNum);
-  if(ex) matches.push({subject: ex.subject, className: 'ESL/Hifz (no grade)'});
+  if(ex) matches.push({subject: ex.subject, className: (ex.group==='HIFZ' ? 'Hifz (no grade)' : 'ESL (no grade)')});
   return matches;
 }
 
@@ -1431,11 +1447,14 @@ function renderTeacherPanel(){
   const classesTaught = new Set(state.classes.filter(cls=>
     Object.values(cls.cells).some(c=> c.teacher===teacher)
   ).map(c=>c.id));
-  const hasExtras = (state.extras||[]).some(e=> e.teacher===teacher);
+  const hasEslExtras = (state.extras||[]).some(e=> e.teacher===teacher && e.group==='ESL');
+  const hasHifzExtras = (state.extras||[]).some(e=> e.teacher===teacher && e.group==='HIFZ');
+  const NO_GRADE_TABS = ['ESL','HIFZ'];
 
-  if(!state.activeTeacherClassId || (state.activeTeacherClassId!=='GENERAL' && !state.classes.find(c=>c.id===state.activeTeacherClassId))){
-    const first = state.classes.find(c=> classesTaught.has(c.id)) || (hasExtras ? null : state.classes[0]);
-    state.activeTeacherClassId = first ? first.id : (hasExtras ? 'GENERAL' : (state.classes[0] ? state.classes[0].id : null));
+  if(!state.activeTeacherClassId || (!NO_GRADE_TABS.includes(state.activeTeacherClassId) && !state.classes.find(c=>c.id===state.activeTeacherClassId))){
+    const first = state.classes.find(c=> classesTaught.has(c.id));
+    state.activeTeacherClassId = first ? first.id
+      : (hasEslExtras ? 'ESL' : (hasHifzExtras ? 'HIFZ' : (state.classes[0] ? state.classes[0].id : null)));
   }
 
   let pickerHtml = state.classes.map(c=>
@@ -1443,8 +1462,10 @@ function renderTeacherPanel(){
       esc(c.name) + (classesTaught.has(c.id) ? '' : '<span style="opacity:.55;font-weight:400;"> · none yet</span>') +
     '</span>'
   ).join('');
-  pickerHtml += '<span class="p-tab'+(state.activeTeacherClassId==='GENERAL'?' active':'')+'" data-class="GENERAL" style="border-color:var(--gold);">ESL / Hifz (no grade)'+
-    (hasExtras ? '' : '<span style="opacity:.55;font-weight:400;"> · none yet</span>') + '</span>';
+  pickerHtml += '<span class="p-tab'+(state.activeTeacherClassId==='ESL'?' active':'')+'" data-class="ESL" style="border-color:var(--gold);">ESL (no grade)'+
+    (hasEslExtras ? '' : '<span style="opacity:.55;font-weight:400;"> · none yet</span>') + '</span>';
+  pickerHtml += '<span class="p-tab'+(state.activeTeacherClassId==='HIFZ'?' active':'')+'" data-class="HIFZ" style="border-color:var(--gold);">Hifz (no grade)'+
+    (hasHifzExtras ? '' : '<span style="opacity:.55;font-weight:400;"> · none yet</span>') + '</span>';
   pickerEl.innerHTML = pickerHtml;
   pickerEl.querySelectorAll('.p-tab').forEach(tab=>{
     tab.addEventListener('click', ()=>{
@@ -1453,16 +1474,18 @@ function renderTeacherPanel(){
     });
   });
 
-  if(state.activeTeacherClassId==='GENERAL'){
+  if(NO_GRADE_TABS.includes(state.activeTeacherClassId)){
+    const group = state.activeTeacherClassId;
+    const label = group==='HIFZ' ? 'Hifz' : 'ESL';
     const maxPeriod = getMaxPeriod();
-    let html = '<p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">For ESL, Hifz, or any pull-out group that mixes students from several grades — assigned here only, never on a class schedule.</p>';
+    let html = '<p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">For '+label+' pull-out periods that mix students from several grades — assigned here only, this never shows on any class/student schedule. Add specific grades later once decided.</p>';
     html += '<table><thead><tr><th style="min-width:70px;">Period</th>';
     DAYS.forEach(d=> html += '<th>'+d+'</th>');
     html += '</tr></thead><tbody>';
     for(let p=1;p<=maxPeriod;p++){
       html += '<tr><th>Period '+p+'</th>';
       DAYS.forEach(day=>{
-        const ex = findExtra(teacher, day, p);
+        const ex = findExtra(teacher, day, p, group);
         if(ex){
           html += '<td class="subject-cell" data-period="'+p+'" data-day="'+day+'"><span class="subj">'+esc(ex.subject)+'</span></td>';
         } else {
@@ -1475,7 +1498,7 @@ function renderTeacherPanel(){
     wrap.innerHTML = html;
     if(state.editMode){
       wrap.querySelectorAll('td.subject-cell').forEach(td=>{
-        td.addEventListener('click', ()=> openExtraModal(teacher, td.dataset.day, parseInt(td.dataset.period,10)));
+        td.addEventListener('click', ()=> openExtraModal(teacher, td.dataset.day, parseInt(td.dataset.period,10), group));
       });
     }
     return;
