@@ -413,8 +413,12 @@
 // Code.gs file provided alongside this app) to save data to a Google
 // Sheet instead of / in addition to this artifact's built-in storage.
 // Leave blank to keep using the built-in storage only.
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwzt_2u8ZPnvvReCEXwxgJyURqgaWW1zP4rtSZh6ucR3IjTnxAUDf5IdHxkrn4ihsO4yw/exec';
-const BACKEND_SECRET = '6585'; // must match SECRET in Code.gs, optional
+// IMPORTANT: use the updated Code.gs (the one that splits data across
+// multiple rows) — the original version stored everything in a single
+// cell, which silently failed once a logo was added (a single Google
+// Sheets cell can only hold 50,000 characters).
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxmS9EUnr7nVJdavAp-NIzZp2rEcWSKzDxB1tD7yZJDoi7afoSKOcqjV6W1FHJN5z-O/exec';
+const BACKEND_SECRET = ''; // must match SECRET in Code.gs, optional
 // ============================================================
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
@@ -546,35 +550,56 @@ let saveTimer = null;
 
 async function performSave(){
   const el = document.getElementById('lastSaved');
+  const now = new Date().toLocaleTimeString();
+
   let backendOk = null;
+  let backendError = null;
   if(BACKEND_URL){
     try{
-      await fetch(BACKEND_URL, {
+      const res = await fetch(BACKEND_URL, {
         method:'POST',
         headers: {'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify({secret: BACKEND_SECRET, data: state})
       });
-      backendOk = true;
-    }catch(e){ backendOk = false; }
+      const json = await res.json();
+      backendOk = !!(json && json.ok);
+      if(!backendOk) backendError = (json && json.error) ? json.error : 'unknown error';
+    }catch(e){ backendOk = false; backendError = String(e); }
   }
 
-  if(!storageAvailable){
-    if(el) el.textContent = backendOk===true
-      ? 'Saved to Google Sheet ' + new Date().toLocaleTimeString()
-      : (BACKEND_URL ? 'Could not reach the backend — download a backup to be safe.' : 'Auto-save unavailable here — use "Download backup" and "Restore backup" instead.');
-    return backendOk===true;
+  let builtInOk = null;
+  if(storageAvailable){
+    try{
+      await window.storage.set('schedule', JSON.stringify(state), true);
+      builtInOk = true;
+    }catch(e){ builtInOk = false; }
   }
 
-  try{
-    await window.storage.set('schedule', JSON.stringify(state), true);
-    if(el) el.textContent = backendOk===true
-      ? 'Saved (Sheet + built-in) ' + new Date().toLocaleTimeString()
-      : 'Saved ' + new Date().toLocaleTimeString();
-    return true;
-  }catch(e){
-    if(el) el.textContent = 'Could not save (changes stay for this session) — download a backup to be safe.';
-    return backendOk===true;
+  const saved = backendOk===true || builtInOk===true;
+  let message, reason;
+
+  if(saved){
+    if(backendOk===true && builtInOk===true) message = 'Saved (Sheet + built-in) ' + now;
+    else if(backendOk===true) message = 'Saved to Google Sheet ' + now;
+    else if(BACKEND_URL && backendOk===false) message = 'Saved to built-in storage ' + now + ' — but the Sheet backup failed' + (backendError ? (' (' + backendError + ')') : '') + '.';
+    else message = 'Saved ' + now;
+    reason = 'ok';
+  } else if(!BACKEND_URL && !storageAvailable){
+    message = 'No save destination available here — you haven\'t set BACKEND_URL yet, and built-in storage only works when this is opened inside Claude. Download a backup for now.';
+    reason = 'no-destination';
+  } else if(BACKEND_URL && backendOk===false && !storageAvailable){
+    message = 'Could not save to the Google Sheet backend' + (backendError ? (' (' + backendError + ')') : '') + ' — double-check the deployed URL and that it\'s deployed with "Anyone" access. Download a backup for now.';
+    reason = 'backend-unreachable';
+  } else if(BACKEND_URL && backendOk===false && builtInOk===false){
+    message = 'Could not save to the Sheet backend' + (backendError ? (' (' + backendError + ')') : '') + ' or built-in storage — download a backup to be safe.';
+    reason = 'both-failed';
+  } else {
+    message = 'Could not save (changes stay for this session) — download a backup to be safe.';
+    reason = 'storage-failed';
   }
+
+  if(el) el.textContent = message;
+  return {ok: saved, reason, message};
 }
 
 function scheduleSave(){
@@ -589,12 +614,13 @@ async function saveNow(){
   const btn = document.getElementById('saveNowBtn');
   const original = btn ? btn.textContent : null;
   if(btn){ btn.textContent = 'Saving…'; btn.disabled = true; }
-  const ok = await performSave();
+  const result = await performSave();
   if(btn){
-    btn.textContent = ok ? 'Saved ✓' : 'Save failed';
+    btn.textContent = result.ok ? 'Saved ✓' : (result.reason==='no-destination' ? 'Not connected' : 'Save failed');
     btn.disabled = false;
-    setTimeout(()=>{ btn.textContent = original; }, 1800);
+    setTimeout(()=>{ btn.textContent = original; }, 2600);
   }
+  if(!result.ok) alert(result.message);
 }
 
 function activeClass(){ return state.classes.find(c=>c.id===state.activeClassId) || state.classes[0]; }
