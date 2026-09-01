@@ -98,6 +98,12 @@
   table.overview th.ov-teacher{position:sticky; left:0; z-index:3; box-shadow:2px 0 4px rgba(0,0,0,.08);}
   table.overview thead th.ov-teacher{z-index:4; background:var(--gold);}
   table.overview tbody th.ov-teacher{background:#f2efe4;}
+
+  .sched-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--border); border-radius:8px;}
+  .sched-scroll table{width:auto; min-width:100%;}
+  @media print{
+    .sched-scroll{overflow:visible !important; border:none;}
+  }
   .editable{
     font-family:'Lora',serif; font-size:19px; font-weight:600; color:var(--navy);
     border:none; background:transparent; outline:none; min-width:60px;
@@ -337,7 +343,7 @@
           <span class="editable small" id="fHome" contenteditable="false"></span>
         </div>
       </div>
-      <div id="classTableWrap"></div>
+      <div id="classTableWrap" class="sched-scroll"></div>
     </div>
   </div>
 
@@ -351,10 +357,10 @@
         </h2>
         <span class="assembly-note" id="teacherEditHint">Click a period to assign it — the class schedule updates automatically</span>
       </div>
-      <div class="summary-wrap" id="teacherSummaryWrap"></div>
+      <div class="summary-wrap sched-scroll" id="teacherSummaryWrap"></div>
       <h3 style="font-size:14.5px;color:var(--navy);margin-bottom:8px;">Assign or edit by grade</h3>
       <div class="pill-tabs no-print" id="teacherClassPicker" style="margin-bottom:12px;"></div>
-      <div id="teacherTableWrap"></div>
+      <div id="teacherTableWrap" class="sched-scroll"></div>
     </div>
   </div>
 
@@ -392,6 +398,10 @@
     <input type="text" id="modalSubject" placeholder="e.g. Math">
     <label id="modalTeacherLabel">Teacher</label>
     <select id="modalTeacher"></select>
+    <div id="modalCoTeacherWrap">
+      <label id="modalCoTeacherLabel">Co-teacher (optional — e.g. both teachers do PE together)</label>
+      <select id="modalCoTeacher"><option value="">— none —</option></select>
+    </div>
     <p id="modalConflict" style="display:none;font-size:12px;color:var(--gold);margin:8px 0 0;"></p>
     <div id="modalAlsoApplyWrap" style="display:none;">
       <label>Combined with other grades? (e.g. G1/2 together)</label>
@@ -429,17 +439,16 @@ function skeletonRows(){
   const p = (num,time)=>({id:uid(), type:'period', num, time});
   const s = (name,time,prayer)=>({id:uid(), type:'special', name, time, prayer:!!prayer});
   return [
-    p(1,'8:45 – 9:45'),
-    p(2,'9:45 – 10:30'),
-    s('1st Break','10:30 – 10:40'),
-    p(3,'10:40 – 11:25'),
-    p(4,'11:25 – 12:10'),
-    p(5,'12:10 – 12:55'),
-    s('Lunch & Wudhu','12:55 – 1:10'),
-    s('Zuhur Salah','1:10 – 1:35', true),
-    p(6,'1:35 – 2:20'),
-    s('2nd Break','2:20 – 2:30'),
-    p(7,'2:30 – 3:15'),
+    p(1,'8:50 – 9:35'),
+    p(2,'9:35 – 10:20'),
+    s('Snack','10:20 – 10:35'),
+    p(3,'10:35 – 11:20'),
+    p(4,'11:20 – 12:05'),
+    p(5,'12:05 – 12:50'),
+    s('Lunch','12:50 – 1:20'),
+    s('Prayer','1:20 – 1:40', true),
+    p(6,'1:40 – 2:25'),
+    p(7,'2:25 – 3:10'),
   ];
 }
 
@@ -782,7 +791,7 @@ function renderClassTable(){
       DAYS.forEach(day=>{
         const c = cls.cells[cellKey(row.id, day)];
         if(c && c.subject){
-          html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'"><span class="subj">'+esc(c.subject)+'</span><span class="teach">'+esc(c.teacher||'')+'</span></td>';
+          html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'"><span class="subj">'+esc(c.subject)+'</span><span class="teach">'+esc(teacherNames(c))+'</span></td>';
         } else {
           html += '<td class="subject-cell empty-x" data-row="'+row.id+'" data-day="'+day+'">—</td>';
         }
@@ -908,6 +917,17 @@ function openCellModal(classId, rowId, day, lockTeacher){
     conflictEl.style.display = 'none';
   }
 
+  // Co-teacher — for periods like PE where two teachers run it together;
+  // both teachers' names show on the student/class schedule and it shows
+  // up on both teachers' own schedules.
+  const coWrap = document.getElementById('modalCoTeacherWrap');
+  const coSel = document.getElementById('modalCoTeacher');
+  coWrap.style.display = 'block';
+  const primaryTeacher = lockTeacher || c.teacher || (state.teachers[0]||'');
+  coSel.innerHTML = '<option value="">— none —</option>' +
+    state.teachers.filter(t=> t!==primaryTeacher).map(t=>'<option value="'+escAttr(t)+'">'+esc(t)+'</option>').join('');
+  coSel.value = c.teacher2 || '';
+
   // "Also assign to other grades" — for combined lessons like G1/2 together
   const wrap = document.getElementById('modalAlsoApplyWrap');
   const applyEl = document.getElementById('modalAlsoApply');
@@ -944,6 +964,7 @@ function openExtraModal(teacher, day, periodNum, group){
   sel.value = teacher;
   sel.disabled = true;
   document.getElementById('modalTeacherLabel').textContent = 'Teacher';
+  document.getElementById('modalCoTeacherWrap').style.display = 'none';
 
   const conflictEl = document.getElementById('modalConflict');
   if(existingAny && existingAny.group!==group){
@@ -979,10 +1000,11 @@ function saveCellModal(){
 
   const cls = findClass(modalTarget.classId);
   const teacher = modalTarget.lockTeacher || document.getElementById('modalTeacher').value;
+  const teacher2 = document.getElementById('modalCoTeacher').value || null;
   if(!subject){
     delete cls.cells[cellKey(modalTarget.rowId, modalTarget.day)];
   } else {
-    cls.cells[cellKey(modalTarget.rowId, modalTarget.day)] = {subject, teacher};
+    cls.cells[cellKey(modalTarget.rowId, modalTarget.day)] = {subject, teacher, teacher2};
   }
 
   // fan out to / clear from other grades marked as "also assign to"
@@ -991,7 +1013,7 @@ function saveCellModal(){
     if(!oc) return;
     const key = cellKey(cb.dataset.alsoRow, modalTarget.day);
     if(cb.checked && subject){
-      oc.cells[key] = {subject, teacher};
+      oc.cells[key] = {subject, teacher, teacher2};
     } else if(!cb.checked && oc.cells[key] && oc.cells[key].subject===subject && oc.cells[key].teacher===teacher){
       delete oc.cells[key];
     }
@@ -1027,7 +1049,7 @@ function removeExtra(teacher, day, periodNum){
 function allTeachersInUse(){
   const set = new Set(state.teachers);
   state.classes.forEach(cls=>{
-    Object.values(cls.cells).forEach(c=>{ if(c.teacher) set.add(c.teacher); });
+    Object.values(cls.cells).forEach(c=>{ if(c.teacher) set.add(c.teacher); if(c.teacher2) set.add(c.teacher2); });
   });
   (state.extras||[]).forEach(e=> set.add(e.teacher));
   return Array.from(set);
@@ -1037,6 +1059,14 @@ function getMaxPeriod(){
   let max = 0;
   state.classes.forEach(cls=> cls.rows.forEach(r=>{ if(r.type==='period' && r.num>max) max = r.num; }));
   return max || 7;
+}
+
+function getPeriodTime(periodNum){
+  for(const cls of state.classes){
+    const row = cls.rows.find(r=> r.type==='period' && r.num===periodNum);
+    if(row && row.time) return row.time;
+  }
+  return '';
 }
 
 function abbrevClass(name){
@@ -1051,7 +1081,7 @@ function findAssignmentsRaw(teacher, day, periodNum){
     const row = cls.rows.find(r=>r.type==='period' && r.num===periodNum);
     if(!row) continue;
     const c = cls.cells[cellKey(row.id, day)];
-    if(c && c.teacher===teacher) matches.push({subject:c.subject, className:cls.name});
+    if(c && (c.teacher===teacher || c.teacher2===teacher)) matches.push({subject:c.subject, className:cls.name});
   }
   const ex = findExtra(teacher, day, periodNum);
   if(ex) matches.push({subject: ex.subject, className: (ex.group==='HIFZ' ? 'Hifz (no grade)' : 'ESL (no grade)')});
@@ -1078,11 +1108,11 @@ function teacherSummaryHtml(teacher, short){
   const maxPeriod = getMaxPeriod();
   let html = '<h3 style="font-family:\'Lora\',serif;color:var(--navy);font-size:'+(short?'15px':'18px')+';margin:0 0 8px;">'+
     esc(teacher) + (short ? ' — full weekly schedule (all grades combined)' : ' — full weekly schedule') + '</h3>';
-  html += '<table><thead><tr><th style="min-width:70px;">Period</th>';
+  html += '<table><thead><tr><th style="min-width:70px;">Period</th><th>Time</th>';
   DAYS.forEach(d=> html += '<th>'+d+'</th>');
   html += '</tr></thead><tbody>';
   for(let p=1;p<=maxPeriod;p++){
-    html += '<tr><th>Period '+p+'</th>';
+    html += '<tr><th>Period '+p+'</th><td><span class="time-cell">'+esc(getPeriodTime(p))+'</span></td>';
     DAYS.forEach(day=>{
       const a = findAssignment(teacher, day, p);
       if(a){
@@ -1114,7 +1144,7 @@ function classTableHtml(cls){
       DAYS.forEach(day=>{
         const c = cls.cells[cellKey(row.id, day)];
         if(c && c.subject){
-          html += '<td class="subject-cell"><span class="subj">'+esc(c.subject)+'</span><span class="teach">'+esc(c.teacher||'')+'</span></td>';
+          html += '<td class="subject-cell"><span class="subj">'+esc(c.subject)+'</span><span class="teach">'+esc(teacherNames(c))+'</span></td>';
         } else {
           html += '<td class="subject-cell empty-x">—</td>';
         }
@@ -1303,7 +1333,7 @@ function buildWorkbook(){
         const line = ['Period '+row.num, row.time];
         DAYS.forEach(day=>{
           const c = cls.cells[cellKey(row.id, day)];
-          line.push(c && c.subject ? c.subject + (c.teacher ? ' ('+c.teacher+')' : '') : '');
+          line.push(c && c.subject ? c.subject + (c.teacher ? ' ('+teacherNames(c)+')' : '') : '');
         });
         aoa.push(line);
       }
@@ -1387,7 +1417,7 @@ function addTeacherFromInput(){
 function renameTeacher(oldName, newName){
   state.teachers = state.teachers.map(t=> t===oldName ? newName : t);
   state.classes.forEach(cls=>{
-    Object.values(cls.cells).forEach(c=>{ if(c.teacher===oldName) c.teacher=newName; });
+    Object.values(cls.cells).forEach(c=>{ if(c.teacher===oldName) c.teacher=newName; if(c.teacher2===oldName) c.teacher2=newName; });
   });
   if(state.activeTeacher===oldName) state.activeTeacher=newName;
   scheduleSave();
@@ -1445,7 +1475,7 @@ function renderTeacherPanel(){
   }
 
   const classesTaught = new Set(state.classes.filter(cls=>
-    Object.values(cls.cells).some(c=> c.teacher===teacher)
+    Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher)
   ).map(c=>c.id));
   const hasEslExtras = (state.extras||[]).some(e=> e.teacher===teacher && e.group==='ESL');
   const hasHifzExtras = (state.extras||[]).some(e=> e.teacher===teacher && e.group==='HIFZ');
@@ -1479,11 +1509,11 @@ function renderTeacherPanel(){
     const label = group==='HIFZ' ? 'Hifz' : 'ESL';
     const maxPeriod = getMaxPeriod();
     let html = '<p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">For '+label+' pull-out periods that mix students from several grades — assigned here only, this never shows on any class/student schedule. Add specific grades later once decided.</p>';
-    html += '<table><thead><tr><th style="min-width:70px;">Period</th>';
+    html += '<table><thead><tr><th style="min-width:70px;">Period</th><th>Time</th>';
     DAYS.forEach(d=> html += '<th>'+d+'</th>');
     html += '</tr></thead><tbody>';
     for(let p=1;p<=maxPeriod;p++){
-      html += '<tr><th>Period '+p+'</th>';
+      html += '<tr><th>Period '+p+'</th><td><span class="time-cell">'+esc(getPeriodTime(p))+'</span></td>';
       DAYS.forEach(day=>{
         const ex = findExtra(teacher, day, p, group);
         if(ex){
@@ -1515,10 +1545,11 @@ function renderTeacherPanel(){
     html += '<tr><th>Period '+row.num+'</th><td><span class="time-cell">'+esc(row.time)+'</span></td>';
     DAYS.forEach(day=>{
       const c = cls.cells[cellKey(row.id, day)];
-      if(c && c.teacher===teacher){
-        html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'"><span class="subj">'+esc(c.subject)+'</span></td>';
+      if(c && (c.teacher===teacher || c.teacher2===teacher)){
+        const other = c.teacher===teacher ? c.teacher2 : c.teacher;
+        html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'"><span class="subj">'+esc(c.subject)+'</span>'+(other?'<span class="teach">+ '+esc(other)+'</span>':'')+'</td>';
       } else if(c && c.subject){
-        html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'" style="color:var(--ink-soft);"><span class="subj" style="color:var(--ink-soft);">'+esc(c.subject)+'</span><span class="teach">'+esc(c.teacher)+'</span></td>';
+        html += '<td class="subject-cell" data-row="'+row.id+'" data-day="'+day+'" style="color:var(--ink-soft);"><span class="subj" style="color:var(--ink-soft);">'+esc(c.subject)+'</span><span class="teach">'+esc(teacherNames(c))+'</span></td>';
       } else {
         html += '<td class="subject-cell empty-x" data-row="'+row.id+'" data-day="'+day+'">X</td>';
       }
@@ -1537,6 +1568,7 @@ function renderTeacherPanel(){
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+function teacherNames(c){ return c && c.teacher ? (c.teacher + (c.teacher2 ? ' & ' + c.teacher2 : '')) : ''; }
 
 function bindStatic(){
   document.getElementById('editToggle').addEventListener('click', ()=>{
