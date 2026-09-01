@@ -1191,14 +1191,6 @@ function teacherSummaryHtml(teacher, short){
     esc(teacher) + (short ? ' — full weekly schedule (all grades combined)' : ' — full weekly schedule') + '</h3>';
 
   groups.forEach(group=>{
-    // Skip a track entirely if this teacher never appears in it — keeps the
-    // combined view from padding out with a whole extra table of "Free"
-    // rows for a section (e.g. High School) the teacher has nothing to do
-    // with.
-    const teachesHere = group.classes.some(cls=> Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher))
-      || group.classes.some(cls=> cls.rows.some(r=> r.type==='period' && findExtra(teacher, DAYS[0], r.num)) );
-    if(!teachesHere) return;
-
     const label = group.classes.map(c=>c.name).join(', ');
     html += '<p style="font-size:11.5px;color:var(--ink-soft);font-weight:600;margin:14px 0 4px;">'+esc(label)+'</p>';
     html += '<table><thead><tr><th style="min-width:90px;">Time</th>';
@@ -1221,10 +1213,6 @@ function teacherSummaryHtml(teacher, short){
     html += '</tbody></table>';
   });
 
-  if(!groups.some(group=> group.classes.some(cls=> Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher)))
-     && !(state.extras||[]).some(e=> e.teacher===teacher)){
-    html += '<p style="font-size:12.5px;color:var(--ink-soft);">No periods assigned yet.</p>';
-  }
   return html;
 }
 
