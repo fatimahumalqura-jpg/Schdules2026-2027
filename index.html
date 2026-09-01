@@ -1110,6 +1110,46 @@ function findAssignmentsByTime(teacher, day, timeStr){
   return matches;
 }
 
+// Different sections of the school (e.g. Elementary vs a High School block
+// schedule) can run on completely different period times, even though both
+// use "Period 1", "Period 2", etc. Matching a teacher's combined view purely
+// by time-string equality (the old getAllTimeSlots/findAssignmentsByTime
+// approach) falls apart here: it lists every distinct time string from every
+// grade as its own row, so almost none of them line up and everything shows
+// "Free". Instead, group classes that share an identical list of period
+// times into one "schedule track", and build one small table per track.
+function getScheduleGroups(){
+  const groups = {};
+  state.classes.forEach(cls=>{
+    const times = cls.rows.filter(r=>r.type==='period').map(r=>r.time);
+    const key = times.join('|');
+    if(!groups[key]){ groups[key] = {times, classes: []}; }
+    groups[key].classes.push(cls);
+  });
+  return Object.values(groups).sort((a,b)=> parseStartMinutes(a.times[0]||'') - parseStartMinutes(b.times[0]||''));
+}
+
+function findAssignmentsByTimeInGroup(teacher, day, timeStr, group){
+  const matches = [];
+  group.classes.forEach(cls=>{
+    const row = cls.rows.find(r=> r.type==='period' && r.time===timeStr);
+    if(!row) return;
+    const c = cls.cells[cellKey(row.id, day)];
+    if(c && (c.teacher===teacher || c.teacher2===teacher)) matches.push({subject:c.subject, className:cls.name});
+    const ex = findExtra(teacher, day, row.num);
+    if(ex) matches.push({subject: ex.subject, className: (ex.group==='HIFZ'?'Hifz (no grade)':'ESL (no grade)')});
+  });
+  // dedupe — the same extra (ESL/Hifz) entry can match this time slot once
+  // per class in the group, since it's keyed by period number, not by class.
+  const seen = new Set();
+  return matches.filter(m=>{
+    const key = m.subject+'|'+m.className;
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function abbrevClass(name){
   const m = String(name).match(/grade\s*(\d+)/i);
   if(m) return 'G'+m[1];
@@ -1146,27 +1186,45 @@ function findAssignment(teacher, day, periodNum){
 }
 
 function teacherSummaryHtml(teacher, short){
-  const slots = getAllTimeSlots();
+  const groups = getScheduleGroups();
   let html = '<h3 style="font-family:\'Lora\',serif;color:var(--navy);font-size:'+(short?'15px':'18px')+';margin:0 0 8px;">'+
     esc(teacher) + (short ? ' — full weekly schedule (all grades combined)' : ' — full weekly schedule') + '</h3>';
-  html += '<table><thead><tr><th style="min-width:90px;">Time</th>';
-  DAYS.forEach(d=> html += '<th>'+d+'</th>');
-  html += '</tr></thead><tbody>';
-  slots.forEach(time=>{
-    html += '<tr><th>'+esc(time)+'</th>';
-    DAYS.forEach(day=>{
-      const matches = findAssignmentsByTime(teacher, day, time);
-      if(matches.length){
-        html += '<td class="subject-cell">' + matches.map(a=>
-          '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
-        ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
-      } else {
-        html += '<td class="subject-cell empty-x">Free</td>';
-      }
+
+  groups.forEach(group=>{
+    // Skip a track entirely if this teacher never appears in it — keeps the
+    // combined view from padding out with a whole extra table of "Free"
+    // rows for a section (e.g. High School) the teacher has nothing to do
+    // with.
+    const teachesHere = group.classes.some(cls=> Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher))
+      || group.classes.some(cls=> cls.rows.some(r=> r.type==='period' && findExtra(teacher, DAYS[0], r.num)) );
+    if(!teachesHere) return;
+
+    const label = group.classes.map(c=>c.name).join(', ');
+    html += '<p style="font-size:11.5px;color:var(--ink-soft);font-weight:600;margin:14px 0 4px;">'+esc(label)+'</p>';
+    html += '<table><thead><tr><th style="min-width:90px;">Time</th>';
+    DAYS.forEach(d=> html += '<th>'+d+'</th>');
+    html += '</tr></thead><tbody>';
+    group.times.forEach(time=>{
+      html += '<tr><th>'+esc(time)+'</th>';
+      DAYS.forEach(day=>{
+        const matches = findAssignmentsByTimeInGroup(teacher, day, time, group);
+        if(matches.length){
+          html += '<td class="subject-cell">' + matches.map(a=>
+            '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
+          ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
+        } else {
+          html += '<td class="subject-cell empty-x">Free</td>';
+        }
+      });
+      html += '</tr>';
     });
-    html += '</tr>';
+    html += '</tbody></table>';
   });
-  html += '</tbody></table>';
+
+  if(!groups.some(group=> group.classes.some(cls=> Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher)))
+     && !(state.extras||[]).some(e=> e.teacher===teacher)){
+    html += '<p style="font-size:12.5px;color:var(--ink-soft);">No periods assigned yet.</p>';
+  }
   return html;
 }
 
