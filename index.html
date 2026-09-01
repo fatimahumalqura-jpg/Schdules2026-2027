@@ -427,7 +427,7 @@
 // multiple rows) — the original version stored everything in a single
 // cell, which silently failed once a logo was added (a single Google
 // Sheets cell can only hold 50,000 characters).
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxmS9EUnr7nVJdavAp-NIzZp2rEcWSKzDxB1tD7yZJDoi7afoSKOcqjV6W1FHJN5z-O/exec';
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwzt_2u8ZPnvvReCEXwxgJyURqgaWW1zP4rtSZh6ucR3IjTnxAUDf5IdHxkrn4ihsO4yw/exec';
 const BACKEND_SECRET = ''; // must match SECRET in Code.gs, optional
 // ============================================================
 
@@ -1069,6 +1069,47 @@ function getPeriodTime(periodNum){
   return '';
 }
 
+// Some classes (e.g. a High School block schedule) can have completely
+// different period times/count than the rest. For a teacher's own combined
+// weekly view we can't rely on "Period 3" meaning the same clock time in
+// every class, so we build the row list from actual times instead.
+function parseStartMinutes(timeStr){
+  const m = String(timeStr||'').match(/(\d{1,2}):(\d{2})/);
+  if(!m) return 99999;
+  let h = parseInt(m[1],10), mm = parseInt(m[2],10);
+  if(h>=1 && h<=7) h += 12; // school-day times like "1:40" without AM/PM are afternoon
+  return h*60+mm;
+}
+
+function getAllTimeSlots(){
+  const seen = new Set();
+  const list = [];
+  state.classes.forEach(cls=> cls.rows.forEach(r=>{
+    if(r.type==='period' && r.time && !seen.has(r.time)){
+      seen.add(r.time);
+      list.push(r.time);
+    }
+  }));
+  list.sort((a,b)=> parseStartMinutes(a) - parseStartMinutes(b));
+  return list;
+}
+
+function findAssignmentsByTime(teacher, day, timeStr){
+  const matches = [];
+  for(const cls of state.classes){
+    const row = cls.rows.find(r=> r.type==='period' && r.time===timeStr);
+    if(!row) continue;
+    const c = cls.cells[cellKey(row.id, day)];
+    if(c && (c.teacher===teacher || c.teacher2===teacher)) matches.push({subject:c.subject, className:cls.name});
+  }
+  (state.extras||[]).forEach(e=>{
+    if(e.teacher===teacher && e.day===day && getPeriodTime(e.periodNum)===timeStr){
+      matches.push({subject:e.subject, className:(e.group==='HIFZ'?'Hifz (no grade)':'ESL (no grade)')});
+    }
+  });
+  return matches;
+}
+
 function abbrevClass(name){
   const m = String(name).match(/grade\s*(\d+)/i);
   if(m) return 'G'+m[1];
@@ -1105,24 +1146,26 @@ function findAssignment(teacher, day, periodNum){
 }
 
 function teacherSummaryHtml(teacher, short){
-  const maxPeriod = getMaxPeriod();
+  const slots = getAllTimeSlots();
   let html = '<h3 style="font-family:\'Lora\',serif;color:var(--navy);font-size:'+(short?'15px':'18px')+';margin:0 0 8px;">'+
     esc(teacher) + (short ? ' — full weekly schedule (all grades combined)' : ' — full weekly schedule') + '</h3>';
-  html += '<table><thead><tr><th style="min-width:70px;">Period</th><th>Time</th>';
+  html += '<table><thead><tr><th style="min-width:90px;">Time</th>';
   DAYS.forEach(d=> html += '<th>'+d+'</th>');
   html += '</tr></thead><tbody>';
-  for(let p=1;p<=maxPeriod;p++){
-    html += '<tr><th>Period '+p+'</th><td><span class="time-cell">'+esc(getPeriodTime(p))+'</span></td>';
+  slots.forEach(time=>{
+    html += '<tr><th>'+esc(time)+'</th>';
     DAYS.forEach(day=>{
-      const a = findAssignment(teacher, day, p);
-      if(a){
-        html += '<td class="subject-cell"><span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span></td>';
+      const matches = findAssignmentsByTime(teacher, day, time);
+      if(matches.length){
+        html += '<td class="subject-cell">' + matches.map(a=>
+          '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
+        ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
       } else {
         html += '<td class="subject-cell empty-x">Free</td>';
       }
     });
     html += '</tr>';
-  }
+  });
   html += '</tbody></table>';
   return html;
 }
