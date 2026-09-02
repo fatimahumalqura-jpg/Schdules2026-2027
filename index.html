@@ -1093,30 +1093,43 @@ function timeKey(timeStr){
   return start+'-'+end;
 }
 
+// A class counts as "High School" if it's Grade 9 or above, or its name
+// literally says "High School" (covers names like "Grade 9- High School").
+function isHighSchoolClass(cls){
+  const m = String(cls.name||'').match(/grade\s*(\d+)/i);
+  if(m && parseInt(m[1],10) >= 9) return true;
+  return /high school/i.test(cls.name);
+}
+
 // Only the time slots that are actually relevant to this teacher (their own
 // classes' periods + any ESL/Hifz extras) — avoids dragging in every other
-// grade's period times into one giant combined table.
+// grade's period times into one giant combined table. Split into elementary
+// vs high school buckets since those two often run on completely different
+// time structures for the same teacher.
 function getTeacherTimeSlots(teacher){
-  const seen = new Map(); // key -> display string (first one seen)
+  const elemSeen = new Map(), hsSeen = new Map();
   state.classes.forEach(cls=>{
     const teachesThis = Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher);
     if(!teachesThis) return;
+    const bucket = isHighSchoolClass(cls) ? hsSeen : elemSeen;
     cls.rows.forEach(r=>{
       if(r.type==='period' && r.time){
         const key = timeKey(r.time);
-        if(!seen.has(key)) seen.set(key, r.time);
+        if(!bucket.has(key)) bucket.set(key, r.time);
       }
     });
   });
   (state.extras||[]).forEach(e=>{
     if(e.teacher===teacher){
       const t = getPeriodTime(e.periodNum);
-      if(t){ const key = timeKey(t); if(!seen.has(key)) seen.set(key, t); }
+      if(t){
+        const key = timeKey(t);
+        if(!elemSeen.has(key) && !hsSeen.has(key)) elemSeen.set(key, t);
+      }
     }
   });
-  const entries = Array.from(seen.values());
-  entries.sort((a,b)=> parseStartMinutes(a) - parseStartMinutes(b));
-  return entries;
+  const sortEntries = m => Array.from(m.values()).sort((a,b)=> parseStartMinutes(a) - parseStartMinutes(b));
+  return { elem: sortEntries(elemSeen), hs: sortEntries(hsSeen) };
 }
 
 function findAssignmentsByTime(teacher, day, timeStr){
@@ -1158,10 +1171,10 @@ function groupAssignments(matches){
 }
 
 // A teacher counts as "High School" if any of the periods they're assigned
-// to belong to the class named "High School" — used to split the teacher
-// tab list into Elementary vs High School groups.
+// to belong to a High School class — used to split the teacher tab list
+// into Elementary vs High School groups.
 function isHighSchoolTeacher(teacher){
-  return state.classes.some(cls=> /high school/i.test(cls.name) &&
+  return state.classes.some(cls=> isHighSchoolClass(cls) &&
     Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher));
 }
 
@@ -1201,30 +1214,46 @@ function findAssignment(teacher, day, periodNum){
 }
 
 function teacherSummaryHtml(teacher, short){
-  const slots = getTeacherTimeSlots(teacher);
+  const {elem, hs} = getTeacherTimeSlots(teacher);
   let html = '<h3 style="font-family:\'Lora\',serif;color:var(--navy);font-size:'+(short?'15px':'18px')+';margin:0 0 8px;">'+
     esc(teacher) + (short ? ' — full weekly schedule (all grades combined)' : ' — full weekly schedule') + '</h3>';
-  if(!slots.length){
+  if(!elem.length && !hs.length){
     return html + '<p style="font-size:13px;color:var(--ink-soft);">Nothing assigned to '+esc(teacher)+' yet.</p>';
   }
-  html += '<table><thead><tr><th style="min-width:90px;">Time</th>';
-  DAYS.forEach(d=> html += '<th>'+d+'</th>');
-  html += '</tr></thead><tbody>';
-  slots.forEach(time=>{
-    html += '<tr><th>'+esc(time)+'</th>';
-    DAYS.forEach(day=>{
-      const matches = groupAssignments(findAssignmentsByTime(teacher, day, time));
-      if(matches.length){
-        html += '<td class="subject-cell">' + matches.map(a=>
-          '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
-        ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
-      } else {
-        html += '<td class="subject-cell empty-x">Free</td>';
-      }
+
+  function tableFor(slots){
+    let t = '<table><thead><tr><th style="min-width:90px;">Time</th>';
+    DAYS.forEach(d=> t += '<th>'+d+'</th>');
+    t += '</tr></thead><tbody>';
+    slots.forEach(time=>{
+      t += '<tr><th>'+esc(time)+'</th>';
+      DAYS.forEach(day=>{
+        const matches = groupAssignments(findAssignmentsByTime(teacher, day, time));
+        if(matches.length){
+          t += '<td class="subject-cell">' + matches.map(a=>
+            '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
+          ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
+        } else {
+          t += '<td class="subject-cell empty-x">Free</td>';
+        }
+      });
+      t += '</tr>';
     });
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
+    t += '</tbody></table>';
+    return t;
+  }
+
+  // Only label the two sections when a teacher actually has both — no need
+  // for extra headings when they're purely Elementary or purely High School.
+  const showLabels = elem.length>0 && hs.length>0;
+  if(elem.length){
+    if(showLabels) html += '<h4 style="font-family:\'Lora\',serif;color:var(--navy);font-size:14px;margin:14px 0 6px;">Elementary schedule</h4>';
+    html += tableFor(elem);
+  }
+  if(hs.length){
+    if(showLabels) html += '<h4 style="font-family:\'Lora\',serif;color:var(--navy);font-size:14px;margin:14px 0 6px;">High School schedule</h4>';
+    html += tableFor(hs);
+  }
   return html;
 }
 
