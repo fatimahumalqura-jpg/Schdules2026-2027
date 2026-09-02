@@ -325,6 +325,7 @@
     <div class="view-tab" data-panel="teacherPanel">Teacher schedules</div>
     <div class="view-tab" data-panel="dutyPanel">Free time overview</div>
     <div class="view-tab" data-panel="dutyRosterPanel">Duty roster</div>
+    <div class="view-tab" data-panel="peSchedulePanel">Physical Education</div>
   </div>
 
   <div class="panel active" id="classPanel">
@@ -378,9 +379,20 @@
     <div class="sheet">
       <div class="sheet-head">
         <h2>Duties &amp; responsibilities</h2>
-        <span class="assembly-note">Non-teaching duties — assign or reassign any cell directly</span>
+        <button class="small no-print" id="dutyEditToggle" style="font-weight:600;"></button>
+        <span class="assembly-note">Non-teaching duties — click any cell directly to edit once in Edit mode</span>
       </div>
       <div id="dutyRosterWrap"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="peSchedulePanel">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Physical Education — whole school</h2>
+        <span class="assembly-note">Every grade's PE periods in one place — see which grade has PE with which teacher, at a glance</span>
+      </div>
+      <div id="peTableWrap" class="sched-scroll"></div>
     </div>
   </div>
 
@@ -496,8 +508,8 @@ function defaultDuties(){
 }
 
 function defaultState(){
-  const gradeNames = ['Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','High School'];
-  const classes = gradeNames.map((n,i)=> makeClass(n, i===0));
+  const gradeNames = ['JK','SK','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','High School'];
+  const classes = gradeNames.map((n,i)=> makeClass(n, i===2));
   return {
     school:'Um Al Qura Islamic School',
     logo:null,
@@ -524,6 +536,9 @@ function normalizeState(){
   });
   if(!state.duties) state.duties = defaultDuties();
   if(!state.activeView) state.activeView = 'classPanel';
+  // one-time add: Kindergarten grades, left blank for the teacher to fill in later
+  if(state.classes && !state.classes.some(c=> c.name==='JK')) state.classes.unshift(makeClass('JK'));
+  if(state.classes && !state.classes.some(c=> c.name==='SK')) state.classes.splice(1, 0, makeClass('SK'));
 }
 
 async function loadFromBackend(){
@@ -642,6 +657,8 @@ function cellKey(rowId, day){ return rowId + '_' + day; }
 function render(){
   document.getElementById('app').classList.toggle('edit-mode', state.editMode);
   document.getElementById('editToggleLabel').textContent = state.editMode ? 'Done editing' : 'Edit schedule';
+  const dutyBtn = document.getElementById('dutyEditToggle');
+  if(dutyBtn) dutyBtn.textContent = state.editMode ? 'Done editing' : '✎ Edit duty roster';
   setEditableText('fSchool', state.school);
   document.querySelectorAll('#fSchool').forEach(el=> el.setAttribute('contenteditable', state.editMode?'true':'false'));
   document.getElementById('storageNote').textContent = BACKEND_URL
@@ -1143,7 +1160,7 @@ function findAssignmentsByTime(teacher, day, timeStr){
   }
   (state.extras||[]).forEach(e=>{
     if(e.teacher===teacher && e.day===day && timeKey(getPeriodTime(e.periodNum))===key){
-      matches.push({subject:e.subject, className:(e.group==='HIFZ'?'Hifz (no grade)':'ESL (no grade)')});
+      matches.push({subject:e.subject, className:''});
     }
   });
   return matches;
@@ -1193,7 +1210,7 @@ function findAssignmentsRaw(teacher, day, periodNum){
     if(c && (c.teacher===teacher || c.teacher2===teacher)) matches.push({subject:c.subject, className:cls.name});
   }
   const ex = findExtra(teacher, day, periodNum);
-  if(ex) matches.push({subject: ex.subject, className: (ex.group==='HIFZ' ? 'Hifz (no grade)' : 'ESL (no grade)')});
+  if(ex) matches.push({subject: ex.subject, className: ''});
   return matches;
 }
 
@@ -1341,6 +1358,62 @@ function renderDutyPanel(){
         } else {
           html += '<td class="ov-free">Free</td>';
         }
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  renderPePanel();
+}
+
+// Whole-school view of every Physical Education period, whoever it's
+// assigned to — so you can see at a glance which grade has PE with which
+// teacher(s), regardless of how different each grade's period times are.
+function renderPePanel(){
+  const wrap = document.getElementById('peTableWrap');
+  if(!wrap) return;
+  const isPE = subj => /physical education/i.test(String(subj||'').trim());
+
+  const seen = new Map();
+  state.classes.forEach(cls=> cls.rows.forEach(r=>{
+    if(r.type!=='period' || !r.time) return;
+    const hasPE = DAYS.some(day=>{
+      const c = cls.cells[cellKey(r.id, day)];
+      return c && isPE(c.subject);
+    });
+    if(hasPE){
+      const key = timeKey(r.time);
+      if(!seen.has(key)) seen.set(key, r.time);
+    }
+  }));
+  const slots = Array.from(seen.values()).sort((a,b)=> parseStartMinutes(a) - parseStartMinutes(b));
+
+  if(!slots.length){
+    wrap.innerHTML = '<p style="color:var(--ink-soft);font-size:13.5px;">No Physical Education periods assigned yet.</p>';
+    return;
+  }
+
+  let html = '<table><thead><tr><th style="min-width:90px;">Time</th>';
+  DAYS.forEach(d=> html += '<th>'+d+'</th>');
+  html += '</tr></thead><tbody>';
+  slots.forEach(time=>{
+    const key = timeKey(time);
+    html += '<tr><th>'+esc(time)+'</th>';
+    DAYS.forEach(day=>{
+      const matches = [];
+      state.classes.forEach(cls=>{
+        const row = cls.rows.find(r=> r.type==='period' && timeKey(r.time)===key);
+        if(!row) return;
+        const c = cls.cells[cellKey(row.id, day)];
+        if(c && isPE(c.subject)) matches.push({className: cls.name, teach: teacherNames(c)});
+      });
+      if(matches.length){
+        html += '<td class="subject-cell">' + matches.map(m=>
+          '<span class="subj">'+esc(m.className)+'</span><span class="teach">'+esc(m.teach)+'</span>'
+        ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
+      } else {
+        html += '<td class="subject-cell empty-x">—</td>';
       }
     });
     html += '</tr>';
@@ -1717,6 +1790,11 @@ function bindStatic(){
     render();
   });
   document.getElementById('teacherEditToggle').addEventListener('click', ()=>{
+    state.editMode = !state.editMode;
+    scheduleSave();
+    render();
+  });
+  document.getElementById('dutyEditToggle').addEventListener('click', ()=>{
     state.editMode = !state.editMode;
     scheduleSave();
     render();
