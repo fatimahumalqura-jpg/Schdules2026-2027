@@ -1136,6 +1136,27 @@ function findAssignmentsByTime(teacher, day, timeStr){
   return matches;
 }
 
+// Groups raw per-class matches at one slot into display-ready entries —
+// e.g. the same subject taught to Grade 1 and Grade 2 at the same time
+// becomes one "Math — Grade 1/2" entry instead of two separate lines.
+function groupAssignments(matches){
+  if(matches.length<=1) return matches;
+  const bySubject = {};
+  const order = [];
+  matches.forEach(m=>{
+    if(!bySubject[m.subject]){ bySubject[m.subject]=[]; order.push(m.subject); }
+    bySubject[m.subject].push(m.className);
+  });
+  return order.map(subject=>{
+    const classNames = bySubject[subject];
+    const gradeNums = classNames.map(n=>{ const mm = n.match(/grade\s*(\d+)/i); return mm ? mm[1] : null; });
+    const label = gradeNums.every(Boolean)
+      ? 'Grade ' + gradeNums.join('/')
+      : classNames.join(', ');
+    return {subject, className: label};
+  });
+}
+
 // A teacher counts as "High School" if any of the periods they're assigned
 // to belong to the class named "High School" — used to split the teacher
 // tab list into Elementary vs High School groups.
@@ -1192,7 +1213,7 @@ function teacherSummaryHtml(teacher, short){
   slots.forEach(time=>{
     html += '<tr><th>'+esc(time)+'</th>';
     DAYS.forEach(day=>{
-      const matches = findAssignmentsByTime(teacher, day, time);
+      const matches = groupAssignments(findAssignmentsByTime(teacher, day, time));
       if(matches.length){
         html += '<td class="subject-cell">' + matches.map(a=>
           '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
