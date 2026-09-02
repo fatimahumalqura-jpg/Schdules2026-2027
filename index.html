@@ -1081,73 +1081,67 @@ function parseStartMinutes(timeStr){
   return h*60+mm;
 }
 
-function getAllTimeSlots(){
-  const seen = new Set();
-  const list = [];
-  state.classes.forEach(cls=> cls.rows.forEach(r=>{
-    if(r.type==='period' && r.time && !seen.has(r.time)){
-      seen.add(r.time);
-      list.push(r.time);
+// Normalizes a time-range string (handles different dash characters / spacing
+// typed across different classes) into a comparable key, e.g. "509-575",
+// so "8:50 – 9:35" and "8:50-9:35" are recognized as the same slot.
+function timeKey(timeStr){
+  const nums = String(timeStr||'').match(/\d{1,2}:\d{2}/g) || [];
+  if(!nums.length) return String(timeStr||'').trim();
+  const toMin = (t)=>{ const [h,m] = t.split(':').map(Number); let hh=h; if(hh>=1&&hh<=7) hh+=12; return hh*60+m; };
+  const start = toMin(nums[0]);
+  const end = nums[1] ? toMin(nums[1]) : start;
+  return start+'-'+end;
+}
+
+// Only the time slots that are actually relevant to this teacher (their own
+// classes' periods + any ESL/Hifz extras) — avoids dragging in every other
+// grade's period times into one giant combined table.
+function getTeacherTimeSlots(teacher){
+  const seen = new Map(); // key -> display string (first one seen)
+  state.classes.forEach(cls=>{
+    const teachesThis = Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher);
+    if(!teachesThis) return;
+    cls.rows.forEach(r=>{
+      if(r.type==='period' && r.time){
+        const key = timeKey(r.time);
+        if(!seen.has(key)) seen.set(key, r.time);
+      }
+    });
+  });
+  (state.extras||[]).forEach(e=>{
+    if(e.teacher===teacher){
+      const t = getPeriodTime(e.periodNum);
+      if(t){ const key = timeKey(t); if(!seen.has(key)) seen.set(key, t); }
     }
-  }));
-  list.sort((a,b)=> parseStartMinutes(a) - parseStartMinutes(b));
-  return list;
+  });
+  const entries = Array.from(seen.values());
+  entries.sort((a,b)=> parseStartMinutes(a) - parseStartMinutes(b));
+  return entries;
 }
 
 function findAssignmentsByTime(teacher, day, timeStr){
+  const key = timeKey(timeStr);
   const matches = [];
   for(const cls of state.classes){
-    const row = cls.rows.find(r=> r.type==='period' && r.time===timeStr);
+    const row = cls.rows.find(r=> r.type==='period' && timeKey(r.time)===key);
     if(!row) continue;
     const c = cls.cells[cellKey(row.id, day)];
     if(c && (c.teacher===teacher || c.teacher2===teacher)) matches.push({subject:c.subject, className:cls.name});
   }
   (state.extras||[]).forEach(e=>{
-    if(e.teacher===teacher && e.day===day && getPeriodTime(e.periodNum)===timeStr){
+    if(e.teacher===teacher && e.day===day && timeKey(getPeriodTime(e.periodNum))===key){
       matches.push({subject:e.subject, className:(e.group==='HIFZ'?'Hifz (no grade)':'ESL (no grade)')});
     }
   });
   return matches;
 }
 
-// Different sections of the school (e.g. Elementary vs a High School block
-// schedule) can run on completely different period times, even though both
-// use "Period 1", "Period 2", etc. Matching a teacher's combined view purely
-// by time-string equality (the old getAllTimeSlots/findAssignmentsByTime
-// approach) falls apart here: it lists every distinct time string from every
-// grade as its own row, so almost none of them line up and everything shows
-// "Free". Instead, group classes that share an identical list of period
-// times into one "schedule track", and build one small table per track.
-function getScheduleGroups(){
-  const groups = {};
-  state.classes.forEach(cls=>{
-    const times = cls.rows.filter(r=>r.type==='period').map(r=>r.time);
-    const key = times.join('|');
-    if(!groups[key]){ groups[key] = {times, classes: []}; }
-    groups[key].classes.push(cls);
-  });
-  return Object.values(groups).sort((a,b)=> parseStartMinutes(a.times[0]||'') - parseStartMinutes(b.times[0]||''));
-}
-
-function findAssignmentsByTimeInGroup(teacher, day, timeStr, group){
-  const matches = [];
-  group.classes.forEach(cls=>{
-    const row = cls.rows.find(r=> r.type==='period' && r.time===timeStr);
-    if(!row) return;
-    const c = cls.cells[cellKey(row.id, day)];
-    if(c && (c.teacher===teacher || c.teacher2===teacher)) matches.push({subject:c.subject, className:cls.name});
-    const ex = findExtra(teacher, day, row.num);
-    if(ex) matches.push({subject: ex.subject, className: (ex.group==='HIFZ'?'Hifz (no grade)':'ESL (no grade)')});
-  });
-  // dedupe — the same extra (ESL/Hifz) entry can match this time slot once
-  // per class in the group, since it's keyed by period number, not by class.
-  const seen = new Set();
-  return matches.filter(m=>{
-    const key = m.subject+'|'+m.className;
-    if(seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+// A teacher counts as "High School" if any of the periods they're assigned
+// to belong to the class named "High School" — used to split the teacher
+// tab list into Elementary vs High School groups.
+function isHighSchoolTeacher(teacher){
+  return state.classes.some(cls=> /high school/i.test(cls.name) &&
+    Object.values(cls.cells).some(c=> c.teacher===teacher || c.teacher2===teacher));
 }
 
 function abbrevClass(name){
@@ -1186,33 +1180,30 @@ function findAssignment(teacher, day, periodNum){
 }
 
 function teacherSummaryHtml(teacher, short){
-  const groups = getScheduleGroups();
+  const slots = getTeacherTimeSlots(teacher);
   let html = '<h3 style="font-family:\'Lora\',serif;color:var(--navy);font-size:'+(short?'15px':'18px')+';margin:0 0 8px;">'+
     esc(teacher) + (short ? ' — full weekly schedule (all grades combined)' : ' — full weekly schedule') + '</h3>';
-
-  groups.forEach(group=>{
-    const label = group.classes.map(c=>c.name).join(', ');
-    html += '<p style="font-size:11.5px;color:var(--ink-soft);font-weight:600;margin:14px 0 4px;">'+esc(label)+'</p>';
-    html += '<table><thead><tr><th style="min-width:90px;">Time</th>';
-    DAYS.forEach(d=> html += '<th>'+d+'</th>');
-    html += '</tr></thead><tbody>';
-    group.times.forEach(time=>{
-      html += '<tr><th>'+esc(time)+'</th>';
-      DAYS.forEach(day=>{
-        const matches = findAssignmentsByTimeInGroup(teacher, day, time, group);
-        if(matches.length){
-          html += '<td class="subject-cell">' + matches.map(a=>
-            '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
-          ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
-        } else {
-          html += '<td class="subject-cell empty-x">Free</td>';
-        }
-      });
-      html += '</tr>';
+  if(!slots.length){
+    return html + '<p style="font-size:13px;color:var(--ink-soft);">Nothing assigned to '+esc(teacher)+' yet.</p>';
+  }
+  html += '<table><thead><tr><th style="min-width:90px;">Time</th>';
+  DAYS.forEach(d=> html += '<th>'+d+'</th>');
+  html += '</tr></thead><tbody>';
+  slots.forEach(time=>{
+    html += '<tr><th>'+esc(time)+'</th>';
+    DAYS.forEach(day=>{
+      const matches = findAssignmentsByTime(teacher, day, time);
+      if(matches.length){
+        html += '<td class="subject-cell">' + matches.map(a=>
+          '<span class="subj">'+esc(a.subject)+'</span><span class="teach">'+esc(a.className)+'</span>'
+        ).join('<hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;">') + '</td>';
+      } else {
+        html += '<td class="subject-cell empty-x">Free</td>';
+      }
     });
-    html += '</tbody></table>';
+    html += '</tr>';
   });
-
+  html += '</tbody></table>';
   return html;
 }
 
@@ -1528,9 +1519,19 @@ function renderTeacherTabs(){
   const el = document.getElementById('teacherTabs');
   const list = allTeachersInUse();
   if(!list.includes(state.activeTeacher)) state.activeTeacher = list[0] || '';
-  el.innerHTML = list.map(t=>
-    '<span class="p-tab'+(t===state.activeTeacher?' active':'')+'" data-teacher="'+escAttr(t)+'">'+esc(t)+'</span>'
-  ).join('');
+  const hsList = list.filter(isHighSchoolTeacher);
+  const elemList = list.filter(t=> !isHighSchoolTeacher(t));
+  const tabHtml = t => '<span class="p-tab'+(t===state.activeTeacher?' active':'')+'" data-teacher="'+escAttr(t)+'">'+esc(t)+'</span>';
+  let html = '';
+  if(elemList.length){
+    html += '<div style="width:100%;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ink-soft);text-transform:uppercase;margin:2px 0 2px;">Elementary teachers</div>';
+    html += elemList.map(tabHtml).join('');
+  }
+  if(hsList.length){
+    html += '<div style="width:100%;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ink-soft);text-transform:uppercase;margin:10px 0 2px;">High School teachers</div>';
+    html += hsList.map(tabHtml).join('');
+  }
+  el.innerHTML = html;
   el.querySelectorAll('.p-tab').forEach(tab=>{
     tab.addEventListener('click', ()=>{
       state.activeTeacher = tab.dataset.teacher;
